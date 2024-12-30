@@ -135,10 +135,6 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
    ```
 5. Open a Pull Request
 
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 🙏 Acknowledgments
 
 - [NewsAPI](https://newsapi.org/) for real-time news data
