@@ -1,7 +1,7 @@
 <div align="center">
   <img src="public/assets/logo.png" alt="News Authenticity Detector Logo" width="200"/>
 
-# 🔍 News Authenticity Detector
+# 🔍 TruthXtract
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
