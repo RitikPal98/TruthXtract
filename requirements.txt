@@ -1,0 +1,36 @@
+# Core dependencies
+Flask
+flask-cors
+gunicorn
+
+# AI/ML dependencies 
+torch
+transformers
+sentencepiece
+scikit-learn
+numpy
+
+# News API and requests
+newsapi-python
+requests
+beautifulsoup4
+
+# Text processing
+nltk
+regex
+
+# Utilities
+python-dotenv
+tqdm
+pandas
+urllib3
+certifi
+charset-normalizer
+idna
+six
+packaging
+
+# Optional but recommended
+pytest  # for testing
+black  # for code formatting
+pylint  # for code linting
