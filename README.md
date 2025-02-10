@@ -48,7 +48,7 @@ In today's digital age, distinguishing fact from fiction has become increasingly
 
 ## 🚀 Getting Started
 
-6. Visit `http://localhost:3000` 🎉
+6. Visit https://truthxtract.me/ 🎉
 
 ## 🧠 How It Works
 
