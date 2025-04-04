@@ -48,25 +48,34 @@ def check_with_fact_checking_sites(text):
         return False, []
 
 def analyze_with_model(text):
-    """Analyze text using the fake news detection model"""
+    """Enhanced model analysis with better preprocessing"""
     try:
-        # Prepare text for classification
-        inputs = tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=512,
-            padding=True
-        )
+        # Clean and preprocess text
+        text = re.sub(r'[^\w\s]', '', text)
+        text = text.lower()
         
-        # Get model prediction
-        with torch.no_grad():
-            outputs = model(**inputs)
-            predictions = torch.nn.functional.softmax(outputs.logits, dim=1)
+        # Split long text into chunks if needed
+        max_length = 512
+        chunks = [text[i:i+max_length] for i in range(0, len(text), max_length)]
         
-        # Convert prediction to probability
-        prob = predictions[0].tolist()
-        return prob
+        probabilities = []
+        for chunk in chunks:
+            inputs = tokenizer(
+                chunk,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True
+            )
+            
+            with torch.no_grad():
+                outputs = model(**inputs)
+                predictions = torch.nn.functional.softmax(outputs.logits, dim=1)
+                probabilities.append(predictions[0].tolist())
+        
+        # Average probabilities across chunks
+        avg_prob = np.mean(probabilities, axis=0)
+        return avg_prob.tolist()
         
     except Exception as e:
         print(f"Model analysis error: {str(e)}")
@@ -109,32 +118,45 @@ def verify_with_external_sources(text):
     return verified_count / total_checks if total_checks > 0 else 0.5
 
 def analyze_text(text, source="", url=""):
-    """Main analysis function"""
+    """Enhanced analysis function"""
     try:
-        # 1. Model Prediction
+        # 1. Model Prediction with improved weight
         model_scores = analyze_with_model(text)
-        real_prob = model_scores[1]  # Assuming index 1 is for real news
+        real_prob = model_scores[1]
         
-        # 2. Fact Checking
+        # 2. Source Credibility Check
+        source_lower = source.lower()
+        source_credibility = RELIABLE_SOURCES.get(source_lower, 0.5)
+        
+        # 3. Fact Checking with improved weight
         fact_checked, claims = check_with_fact_checking_sites(text)
-        fact_check_score = 0.8 if fact_checked else 0.5
+        fact_check_score = 0.9 if fact_checked else 0.4
         
-        # 3. External Verification
+        # 4. External Verification
         verification_score = verify_with_external_sources(text)
         
-        # Combine scores with emphasis on model prediction
-        final_score = (real_prob * 0.6 + 
-                      fact_check_score * 0.2 + 
-                      verification_score * 0.2)
+        # 5. URL Credibility
+        url_credibility = 0.8 if any(domain in url.lower() for domain in RELIABLE_SOURCES.keys()) else 0.4
         
-        # Calculate confidence based on agreement between different methods
-        scores = [real_prob, fact_check_score, verification_score]
+        # Weighted combination of all scores
+        final_score = (
+            real_prob * 0.4 +  # Model prediction
+            fact_check_score * 0.25 +  # Fact checking
+            verification_score * 0.15 +  # External verification
+            source_credibility * 0.1 +  # Source credibility
+            url_credibility * 0.1  # URL credibility
+        )
+        
+        # Calculate confidence
+        scores = [real_prob, fact_check_score, verification_score, source_credibility, url_credibility]
         confidence = 1 - np.std(scores)
         
         return final_score, confidence, {
             'model_score': float(real_prob),
             'fact_check_score': float(fact_check_score),
             'verification_score': float(verification_score),
+            'source_credibility': float(source_credibility),
+            'url_credibility': float(url_credibility),
             'claims_found': len(claims) if claims else 0
         }
         
@@ -162,115 +184,83 @@ RELIABLE_SOURCES = {
     'zee news': 0.80,
 }
 
+# First, let's fix the NEWS_SOURCES definition that was incomplete
+NEWS_SOURCES = {
+    'mainstream': 'timesofindia.indiatimes.com,hindustantimes.com,indianexpress.com,ndtv.com',
+    'business': 'economictimes.indiatimes.com,livemint.com,business-standard.com',
+    'regional': 'thehindu.com,deccanherald.com,telegraphindia.com',
+    'international': 'reuters.com,apnews.com,bbc.co.uk,aljazeera.com'
+}
+
+# Add the missing PRIORITY_TOPICS definition
+PRIORITY_TOPICS = {
+    'breaking_news': [
+        'breaking', 'urgent', 'alert', 'latest', 'update', 'just in',
+        'developing', 'emergency'
+    ],
+    'politics': [
+        'election', 'government', 'minister', 'parliament', 'policy',
+        'political', 'vote', 'campaign'
+    ],
+    'economy': [
+        'economy', 'market', 'stock', 'trade', 'finance', 'business',
+        'gdp', 'inflation'
+    ],
+    'technology': [
+        'technology', 'tech', 'digital', 'cyber', 'ai', 'artificial intelligence',
+        'innovation', 'startup'
+    ]
+}
+
 @app.route('/api/news-gallery', methods=['GET'])
 def get_news_gallery():
     try:
         all_articles = []
         
-        # Define important Indian topics and keywords
-        PRIORITY_TOPICS = {
-            'cyber_security': [
-                'cyber attack', 'cyber crime', 'cyber security', 'hacking', 'data breach',
-                'online fraud', 'cyber police', 'digital security', 'ransomware',
-                'phishing', 'cyber threat', 'data theft'
-            ],
-            'public_safety': [
-                'public safety', 'emergency alert', 'safety warning', 'national security',
-                'terror alert', 'disaster warning', 'health alert', 'safety advisory'
-            ],
-            'fake_news': [
-                'fake news', 'misinformation', 'disinformation', 'fact check',
-                'misleading news', 'false information', 'rumor alert'
-            ],
-            'national_security': [
-                'national security', 'border security', 'defense', 'military alert',
-                'security threat', 'intelligence alert', 'terrorist', 'security advisory'
-            ],
-            'government_alerts': [
-                'government advisory', 'official announcement', 'ministry alert',
-                'policy change', 'new regulation', 'law enforcement'
-            ]
-        }
-
-        # 1. Fetch priority Indian news
-        for topic, keywords in PRIORITY_TOPICS.items():
+        # Fetch from each source group
+        for source_type, domains in NEWS_SOURCES.items():
             try:
-                query = ' OR '.join(keywords)
-                topic_news = newsapi.get_everything(
-                    q=f'(India OR Indian) AND ({query})',
-                    domains='timesofindia.indiatimes.com,hindustantimes.com,indianexpress.com,'
-                           'ndtv.com,thehindu.com,economictimes.indiatimes.com,'
-                           'news18.com,indiatoday.in,firstpost.com',
+                # Add date range to get more recent news
+                source_news = newsapi.get_everything(
+                    domains=domains,
                     language='en',
                     sort_by='publishedAt',
+                    from_param=(datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d'),
+                    to=datetime.now().strftime('%Y-%m-%d'),
                     page_size=5
                 )
                 
-                # Add topic category to each article
-                for article in topic_news.get('articles', []):
-                    article['category'] = topic
-                all_articles.extend(topic_news.get('articles', []))
+                if source_news.get('articles'):
+                    for article in source_news['articles']:
+                        article['source_type'] = source_type
+                        all_articles.append(article)
                 
             except Exception as e:
-                print(f"Error fetching {topic} news: {str(e)}")
+                print(f"Error fetching {source_type} news: {str(e)}")
+                continue
 
-        # 2. Fetch general Indian news (as backup)
-        try:
-            general_indian_news = newsapi.get_top_headlines(
-                country='in',
-                language='en',
-                page_size=5
-            )
-            for article in general_indian_news.get('articles', []):
-                article['category'] = 'general'
-            all_articles.extend(general_indian_news.get('articles', []))
-        except Exception as e:
-            print(f"Error fetching general Indian news: {str(e)}")
-
-        print(f"Fetched total {len(all_articles)} articles")
-
-        # Remove duplicates and prioritize articles
+        # Remove duplicates and process articles
         seen_titles = set()
-        unique_articles = []
-        
-        # First, add articles from priority topics
-        for article in all_articles:
-            if (article.get('title') and 
-                article['title'] not in seen_titles and 
-                article.get('category') != 'general'):
-                
-                seen_titles.add(article['title'])
-                unique_articles.append(article)
-
-        # Then add general articles if needed
-        for article in all_articles:
-            if (len(unique_articles) < 15 and 
-                article.get('title') and 
-                article['title'] not in seen_titles):
-                
-                seen_titles.add(article['title'])
-                unique_articles.append(article)
-
-        # Limit to 15 most recent articles
-        unique_articles = sorted(
-            unique_articles,
-            key=lambda x: x.get('publishedAt', ''),
-            reverse=True
-        )[:15]
-
         processed_news = []
-        for article in unique_articles:
+        
+        for article in all_articles:
             try:
                 if not article.get('title') or not article.get('description'):
                     continue
-
+                    
+                if article['title'] in seen_titles:
+                    continue
+                    
+                seen_titles.add(article['title'])
+                
                 text = f"{article['title']} {article['description']}"
                 source_name = article.get('source', {}).get('name', '')
                 url = article.get('url', '')
 
+                # Analyze the article
                 final_score, confidence, analysis = analyze_text(text, source_name, url)
 
-                # Calculate priority score based on content
+                # Calculate priority score
                 priority_score = 0
                 for topic, keywords in PRIORITY_TOPICS.items():
                     if any(keyword.lower() in text.lower() for keyword in keywords):
@@ -287,49 +277,84 @@ def get_news_gallery():
                     'confidence': float(confidence),
                     'score': float(final_score),
                     'analysis': analysis,
-                    'category': article.get('category', 'general'),
+                    'category': article.get('source_type', 'general'),
                     'priorityScore': priority_score,
-                    'isAlert': priority_score > 1  # Mark high-priority news as alerts
+                    'isAlert': priority_score > 1
                 })
 
             except Exception as e:
                 print(f"Error processing article: {str(e)}")
                 continue
 
-        # Sort by priority score and publish date
+        # Sort by priority and date
         processed_news.sort(
             key=lambda x: (x['priorityScore'], x['publishedAt']), 
             reverse=True
         )
 
-        # Limit to exactly 15 articles
+        # Limit to 15 articles
         processed_news = processed_news[:15]
+
+        if not processed_news:
+            return jsonify({'error': 'No news articles available'})
 
         return jsonify(processed_news)
 
     except Exception as e:
         print(f"Error in get_news_gallery: {str(e)}")
-        return jsonify([])
+        return jsonify({'error': 'Failed to fetch news'})
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
         data = request.get_json()
-        text = data['newsText']
+        text = data.get('newsText')
         
+        if not text:
+            return jsonify({
+                'status': 'error',
+                'error': 'No news text provided'
+            })
+
+        # Get analysis results
         final_score, confidence, analysis = analyze_text(text)
         
+        # Get fact-checking references
+        fact_checked, claims = check_with_fact_checking_sites(text)
+        
+        # Search for similar news in reliable sources
+        similar_news = newsapi.get_everything(
+            q=text[:100],  # Use first 100 chars as search query
+            language='en',
+            sort_by='relevancy',
+            page_size=3
+        )
+        
         return jsonify({
+            'status': 'success',
             'isReal': final_score > 0.5,
             'confidence': float(confidence),
             'score': float(final_score),
-            'analysis': analysis,
-            'status': 'success'
+            'analysis': {
+                'model_score': float(analysis.get('model_score', 0)),
+                'fact_check_score': float(analysis.get('fact_check_score', 0)),
+                'verification_score': float(analysis.get('verification_score', 0)),
+                'source_credibility': float(analysis.get('source_credibility', 0)),
+                'claims_found': analysis.get('claims_found', 0)
+            },
+            'references': {
+                'fact_check_claims': claims,
+                'similar_articles': similar_news.get('articles', []),
+                'verification_sources': list(RELIABLE_SOURCES.keys())
+            }
         })
             
     except Exception as e:
         print(f"Error in predict: {str(e)}")
-        return jsonify({'error': str(e), 'status': 'error'})
+        return jsonify({
+            'status': 'error',
+            'error': 'Failed to analyze news'
+        })
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
