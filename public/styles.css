@@ -181,6 +181,11 @@ body {
 .result-bar-fill.fake {
     background: linear-gradient(to right, #ff3366, #ff6666);
 }
+.color-white{
+    color: white !important;
+    text-decoration: none !important;
+    padding: 10px;
+}
 
 @keyframes stampAppear {
     0% {
