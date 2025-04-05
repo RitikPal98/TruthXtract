@@ -134,67 +134,128 @@ document.addEventListener("DOMContentLoaded", () => {
   function displayResult(result) {
     const confidencePercent = (result.confidence * 100).toFixed(1);
     const scorePercent = (result.score * 100).toFixed(1);
+    const verdict = result.isReal ? "REAL" : "FAKE";
 
+    // Create a more detailed analysis report
     let html = `
       <div class="result-card ${result.isReal ? "real" : "fake"}">
         <div class="result-header">
-          <div class="result-stamp ${result.isReal ? "real" : "fake"}">
-            ${result.isReal ? "REAL" : "FAKE"}
-          </div>
-          <div class="confidence-text">
-            Confidence: ${confidencePercent}%
+          <div class="result-summary">
+            <div class="result-stamp ${result.isReal ? "real" : "fake"}">
+              ${verdict}
+            </div>
+            <div class="confidence-meter">
+              <div class="meter-label">Confidence: ${confidencePercent}%</div>
+              <div class="meter-bar">
+                <div class="meter-fill ${
+                  result.isReal ? "real" : "fake"
+                }" style="width: ${confidencePercent}%"></div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="analysis-details">
-          <div class="score-breakdown">
-            <h4>Analysis Breakdown:</h4>
-            <ul>
-              <li>
-                <span class="score-label">AI Model Analysis:</span>
-                <div class="score-bar">
-                  <div class="score-fill" style="width: ${(
-                    result.analysis.model_score * 100
-                  ).toFixed(1)}%"></div>
-                </div>
-                <span class="score-value">${(
-                  result.analysis.model_score * 100
-                ).toFixed(1)}%</span>
-              </li>
-              <li>
-                <span class="score-label">Fact Check Verification:</span>
-                <div class="score-bar">
-                  <div class="score-fill" style="width: ${(
-                    result.analysis.fact_check_score * 100
-                  ).toFixed(1)}%"></div>
-                </div>
-                <span class="score-value">${(
-                  result.analysis.fact_check_score * 100
-                ).toFixed(1)}%</span>
-              </li>
-              <li>
-                <span class="score-label">Source Credibility:</span>
-                <div class="score-bar">
-                  <div class="score-fill" style="width: ${(
-                    result.analysis.source_credibility * 100
-                  ).toFixed(1)}%"></div>
-                </div>
-                <span class="score-value">${(
-                  result.analysis.source_credibility * 100
-                ).toFixed(1)}%</span>
-              </li>
-            </ul>
+        <div class="report-tabs">
+          <button class="tab-btn active" data-tab="analysis">Analysis</button>
+          <button class="tab-btn" data-tab="evidence">Evidence</button>
+          <button class="tab-btn" data-tab="sources">Sources</button>
+        </div>
+
+        <div class="report-content">
+          <div class="tab-panel active" id="analysis-panel">
+            <div class="score-visualization">
+              <div class="donut-chart-container">
+                <canvas id="scoreChart" width="200" height="200"></canvas>
+              </div>
+              <div class="score-details">
+                <h4>Detailed Analysis</h4>
+                <ul class="score-breakdown-list">
+                  <li>
+                    <span class="score-label">AI Model Analysis:</span>
+                    <div class="score-bar">
+                      <div class="score-fill" style="width: ${(
+                        result.analysis.model_score * 100
+                      ).toFixed(1)}%"></div>
+                    </div>
+                    <span class="score-value">${(
+                      result.analysis.model_score * 100
+                    ).toFixed(1)}%</span>
+                  </li>
+                  <li>
+                    <span class="score-label">Fact Check Verification:</span>
+                    <div class="score-bar">
+                      <div class="score-fill" style="width: ${(
+                        result.analysis.fact_check_score * 100
+                      ).toFixed(1)}%"></div>
+                    </div>
+                    <span class="score-value">${(
+                      result.analysis.fact_check_score * 100
+                    ).toFixed(1)}%</span>
+                  </li>
+                  <li>
+                    <span class="score-label">Source Credibility:</span>
+                    <div class="score-bar">
+                      <div class="score-fill" style="width: ${(
+                        result.analysis.source_credibility * 100
+                      ).toFixed(1)}%"></div>
+                    </div>
+                    <span class="score-value">${(
+                      result.analysis.source_credibility * 100
+                    ).toFixed(1)}%</span>
+                  </li>
+                  ${
+                    result.analysis.verification_score
+                      ? `
+                  <li>
+                    <span class="score-label">External Verification:</span>
+                    <div class="score-bar">
+                      <div class="score-fill" style="width: ${(
+                        result.analysis.verification_score * 100
+                      ).toFixed(1)}%"></div>
+                    </div>
+                    <span class="score-value">${(
+                      result.analysis.verification_score * 100
+                    ).toFixed(1)}%</span>
+                  </li>`
+                      : ""
+                  }
+                </ul>
+              </div>
+            </div>
+            
+            <div class="analysis-summary">
+              <h4>Summary</h4>
+              <p>This content has been analyzed and found to be <strong>${verdict}</strong> with ${confidencePercent}% confidence based on multiple verification methods including AI analysis, fact checking, and source credibility assessment.</p>
+              ${
+                result.isReal
+                  ? `<div class="recommendation real">This content appears to be credible and can be trusted.</div>`
+                  : `<div class="recommendation fake">This content contains misinformation and should not be trusted or shared.</div>`
+              }
+            </div>
           </div>
 
-          <div class="references-section">
-            <h4>Supporting Evidence:</h4>
-            ${renderReferences(result.references)}
+          <div class="tab-panel" id="evidence-panel">
+            <div class="evidence-container">
+              ${renderEnhancedEvidence(result.references, newsInput.value)}
+            </div>
+          </div>
+
+          <div class="tab-panel" id="sources-panel">
+            <div class="sources-container">
+              ${renderSourcesInfo(result.references)}
+            </div>
           </div>
         </div>
       </div>
     `;
 
     resultDiv.innerHTML = html;
+
+    // Initialize tabs functionality
+    initTabs();
+
+    // Create chart after DOM is updated
+    createScoreChart(result.analysis);
   }
 
   function renderReferences(references) {
@@ -383,4 +444,422 @@ document.addEventListener("DOMContentLoaded", () => {
       50
     );
   }, 1000);
+
+  // Add tab functionality
+  function initTabs() {
+    const tabBtns = document.querySelectorAll(".tab-btn");
+    const tabPanels = document.querySelectorAll(".tab-panel");
+
+    tabBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        // Remove active class from all buttons and panels
+        tabBtns.forEach((b) => b.classList.remove("active"));
+        tabPanels.forEach((p) => p.classList.remove("active"));
+
+        // Add active class to clicked button
+        btn.classList.add("active");
+
+        // Show the corresponding panel
+        const tabName = btn.getAttribute("data-tab");
+        document.getElementById(`${tabName}-panel`).classList.add("active");
+      });
+    });
+  }
+
+  // Create a donut chart for score visualization
+  function createScoreChart(analysis) {
+    // Create canvas context
+    const canvas = document.getElementById("scoreChart");
+    const ctx = canvas.getContext("2d");
+
+    // Define data for the chart
+    const data = [
+      {
+        label: "AI Model",
+        value: analysis.model_score,
+        color: "#4CAF50",
+      },
+      {
+        label: "Fact Check",
+        value: analysis.fact_check_score,
+        color: "#2196F3",
+      },
+      {
+        label: "Source Credibility",
+        value: analysis.source_credibility,
+        color: "#9C27B0",
+      },
+    ];
+
+    if (analysis.verification_score) {
+      data.push({
+        label: "External Verification",
+        value: analysis.verification_score,
+        color: "#FF9800",
+      });
+    }
+
+    // Calculate total for average
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    const average = total / data.length;
+
+    // Draw chart
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(centerX, centerY) - 10;
+    const innerRadius = radius * 0.6;
+
+    // Draw segments
+    let startAngle = -0.5 * Math.PI; // Start at top
+
+    data.forEach((segment) => {
+      const segmentValue = segment.value;
+      const endAngle = startAngle + 2 * Math.PI * segmentValue;
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.arc(centerX, centerY, innerRadius, endAngle, startAngle, true);
+      ctx.closePath();
+
+      ctx.fillStyle = segment.color;
+      ctx.fill();
+
+      startAngle = endAngle;
+    });
+
+    // Draw center circle with average
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+
+    // Draw text in center
+    ctx.fillStyle = "#333333";
+    ctx.font = "bold 24px Inter";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${(average * 100).toFixed(0)}%`, centerX, centerY);
+
+    // Draw legend
+    const legendY = canvas.height - 40;
+    const legendSpacing = canvas.width / (data.length + 1);
+
+    data.forEach((segment, index) => {
+      const x = (index + 1) * legendSpacing;
+
+      // Draw color box
+      ctx.fillStyle = segment.color;
+      ctx.fillRect(x - 30, legendY, 10, 10);
+
+      // Draw label
+      ctx.fillStyle = "#666666";
+      ctx.font = "10px Inter";
+      ctx.textAlign = "left";
+      ctx.fillText(segment.label, x - 15, legendY + 8);
+    });
+  }
+
+  // Render enhanced evidence with context matching
+  function renderEnhancedEvidence(references, userInput) {
+    if (!references) return "<p>No evidence found related to this content.</p>";
+
+    // Extract key phrases from user input
+    const userKeywords = extractKeywords(userInput);
+
+    let html = '<div class="evidence-sections">';
+
+    // Render fact check claims with relevance indicators
+    if (
+      references.fact_check_claims &&
+      references.fact_check_claims.length > 0
+    ) {
+      html += `
+        <div class="evidence-section">
+          <h4>Fact Check Results</h4>
+          <div class="evidence-items">
+      `;
+
+      references.fact_check_claims.forEach((claim) => {
+        const relevance = calculateRelevance(
+          claim.title + (claim.text || ""),
+          userKeywords
+        );
+        const relevanceClass =
+          relevance > 0.7
+            ? "high-relevance"
+            : relevance > 0.4
+            ? "medium-relevance"
+            : "low-relevance";
+
+        html += `
+          <div class="evidence-item ${relevanceClass}">
+            <div class="evidence-header">
+              <h5>${claim.title}</h5>
+              <span class="relevance-badge">${
+                relevance > 0.7
+                  ? "Highly Relevant"
+                  : relevance > 0.4
+                  ? "Relevant"
+                  : "Somewhat Relevant"
+              }</span>
+            </div>
+            <div class="evidence-body">
+              <p>${claim.text || "No detailed information available."}</p>
+              <div class="evidence-meta">
+                ${
+                  claim.publisher
+                    ? `<span class="evidence-source">Source: ${claim.publisher.name}</span>`
+                    : ""
+                }
+                ${
+                  claim.claimDate
+                    ? `<span class="evidence-date">Date: ${new Date(
+                        claim.claimDate
+                      ).toLocaleDateString()}</span>`
+                    : ""
+                }
+              </div>
+              <a href="${
+                claim.url
+              }" target="_blank" class="evidence-link">View Full Fact Check</a>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
+    // Render similar articles with relevance indicators
+    if (references.similar_articles && references.similar_articles.length > 0) {
+      html += `
+        <div class="evidence-section">
+          <h4>Similar News Articles</h4>
+          <div class="evidence-items">
+      `;
+
+      references.similar_articles.forEach((article) => {
+        const articleText = article.title + " " + (article.description || "");
+        const relevance = calculateRelevance(articleText, userKeywords);
+        const relevanceClass =
+          relevance > 0.7
+            ? "high-relevance"
+            : relevance > 0.4
+            ? "medium-relevance"
+            : "low-relevance";
+
+        html += `
+          <div class="evidence-item ${relevanceClass}">
+            <div class="evidence-header">
+              <h5>${article.title}</h5>
+              <span class="relevance-badge">${
+                relevance > 0.7
+                  ? "Highly Relevant"
+                  : relevance > 0.4
+                  ? "Relevant"
+                  : "Somewhat Relevant"
+              }</span>
+            </div>
+            <div class="evidence-body">
+              ${
+                article.urlToImage
+                  ? `<img src="${article.urlToImage}" class="evidence-image" alt="${article.title}">`
+                  : ""
+              }
+              <p>${article.description || "No description available."}</p>
+              <div class="evidence-meta">
+                ${
+                  article.source
+                    ? `<span class="evidence-source">Source: ${article.source.name}</span>`
+                    : ""
+                }
+                ${
+                  article.publishedAt
+                    ? `<span class="evidence-date">Date: ${new Date(
+                        article.publishedAt
+                      ).toLocaleDateString()}</span>`
+                    : ""
+                }
+              </div>
+              <a href="${
+                article.url
+              }" target="_blank" class="evidence-link">Read Full Article</a>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
+    html += "</div>";
+    return html;
+  }
+
+  // Render sources information
+  function renderSourcesInfo(references) {
+    if (!references || !references.verification_sources) {
+      return "<p>No source information available.</p>";
+    }
+
+    const sources = references.verification_sources;
+    let html = `
+      <div class="sources-overview">
+        <h4>Reliable Sources Used for Verification</h4>
+        <p>The analysis is based on data from ${sources.length} trusted news sources and fact-checking organizations.</p>
+        
+        <div class="sources-grid">
+    `;
+
+    // Group sources by category
+    const categories = {
+      mainstream: [],
+      "fact-checkers": [],
+      international: [],
+      specialized: [],
+    };
+
+    // Sort sources into categories (mockup categorization)
+    sources.forEach((source) => {
+      if (
+        source.includes("fact") ||
+        source.includes("check") ||
+        source.includes("truth")
+      ) {
+        categories["fact-checkers"].push(source);
+      } else if (
+        source.includes("times") ||
+        source.includes("post") ||
+        source.includes("news")
+      ) {
+        categories["mainstream"].push(source);
+      } else if (
+        source.includes("bbc") ||
+        source.includes("reuters") ||
+        source.includes("associated")
+      ) {
+        categories["international"].push(source);
+      } else {
+        categories["specialized"].push(source);
+      }
+    });
+
+    // Render each category
+    Object.keys(categories).forEach((category) => {
+      if (categories[category].length > 0) {
+        html += `
+          <div class="source-category">
+            <h5>${category.charAt(0).toUpperCase() + category.slice(1)}</h5>
+            <div class="source-tags">
+              ${categories[category]
+                .map(
+                  (source) => `
+                <div class="source-tag">${source}</div>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+    });
+
+    html += `
+        </div>
+      </div>
+      
+      <div class="source-methodology">
+        <h4>Verification Methodology</h4>
+        <p>Our system evaluates news by comparing it against verified reports from trusted sources, checking for consistency with known facts, and analyzing linguistic patterns associated with misinformation.</p>
+        
+        <div class="methodology-steps">
+          <div class="methodology-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <h5>Content Analysis</h5>
+              <p>AI models analyze text for patterns common in fake news</p>
+            </div>
+          </div>
+          <div class="methodology-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <h5>Fact Checking</h5>
+              <p>Claims are cross-referenced with fact-checking databases</p>
+            </div>
+          </div>
+          <div class="methodology-step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <h5>Source Verification</h5>
+              <p>Credibility of sources is evaluated based on track record</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return html;
+  }
+
+  // Extract keywords from text
+  function extractKeywords(text) {
+    if (!text) return [];
+
+    // Simple keyword extraction - remove common words and punctuation
+    const commonWords = [
+      "the",
+      "and",
+      "a",
+      "an",
+      "in",
+      "on",
+      "at",
+      "to",
+      "for",
+      "of",
+      "with",
+      "is",
+      "are",
+      "was",
+      "were",
+    ];
+    const words = text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .split(/\s+/)
+      .filter((word) => word.length > 3 && !commonWords.includes(word));
+
+    // Count word frequency
+    const wordCounts = {};
+    words.forEach((word) => {
+      wordCounts[word] = (wordCounts[word] || 0) + 1;
+    });
+
+    // Sort by frequency and take top keywords
+    return Object.keys(wordCounts)
+      .sort((a, b) => wordCounts[b] - wordCounts[a])
+      .slice(0, 15);
+  }
+
+  // Calculate relevance between a text and keywords
+  function calculateRelevance(text, keywords) {
+    if (!text || !keywords || keywords.length === 0) return 0;
+
+    text = text.toLowerCase();
+    let matches = 0;
+
+    keywords.forEach((keyword) => {
+      if (text.includes(keyword)) {
+        matches++;
+      }
+    });
+
+    return matches / keywords.length;
+  }
 });

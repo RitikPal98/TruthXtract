@@ -884,3 +884,367 @@ body {
 body{
         background-image: url("https://www.transparenttextures.com/patterns/skulls.png");
 }
+
+/* Enhanced Verification Report Styles */
+.result-card {
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--box-shadow);
+  margin-top: 2rem;
+  animation: slideUp 0.5s ease;
+  background: var(--card-bg);
+}
+
+.result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+}
+
+.confidence-meter {
+  flex: 1;
+  margin-left: 2rem;
+}
+
+.meter-label {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.meter-bar {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  transition: width 1s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.meter-fill.real {
+  background: linear-gradient(to right, var(--primary-color), var(--primary-light));
+}
+
+.meter-fill.fake {
+  background: linear-gradient(to right, var(--danger-color), #ff6d91);
+}
+
+/* Tabs Navigation */
+.report-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.tab-btn {
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+.tab-btn:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 3px;
+  background: var(--primary-color);
+  transition: width 0.3s ease;
+}
+
+.tab-btn.active {
+  color: var(--text-color);
+}
+
+.tab-btn.active:after {
+  width: 100%;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Tab Panels */
+.report-content {
+  padding: 2rem;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+  animation: fadeIn 0.5s ease;
+}
+
+/* Analysis Tab */
+.score-visualization {
+  display: flex;
+  margin-bottom: 2rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+}
+
+.donut-chart-container {
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+
+.score-details {
+  flex: 1;
+  margin-left: 2rem;
+}
+
+.score-breakdown-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+}
+
+.score-breakdown-list li {
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+.analysis-summary {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+}
+
+.recommendation {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.recommendation.real {
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--primary-color);
+  border-left: 4px solid var(--primary-color);
+}
+
+.recommendation.fake {
+  background: rgba(255, 51, 102, 0.1);
+  color: var(--danger-color);
+  border-left: 4px solid var(--danger-color);
+}
+
+/* Evidence Tab */
+.evidence-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.evidence-section h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: var(--text-color);
+}
+
+.evidence-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.evidence-item {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  transition: var(--transition);
+  border-left: 4px solid #888;
+}
+
+.evidence-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+.evidence-item.high-relevance {
+  border-left-color: var(--primary-color);
+}
+
+.evidence-item.medium-relevance {
+  border-left-color: #FFC107;
+}
+
+.evidence-item.low-relevance {
+  border-left-color: #9E9E9E;
+}
+
+.evidence-header {
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.evidence-header h5 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-color);
+}
+
+.relevance-badge {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+}
+
+.high-relevance .relevance-badge {
+  background: rgba(0, 255, 136, 0.2);
+  color: var(--primary-color);
+}
+
+.medium-relevance .relevance-badge {
+  background: rgba(255, 193, 7, 0.2);
+  color: #FFC107;
+}
+
+.evidence-body {
+  padding: 1rem;
+}
+
+.evidence-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.evidence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1rem 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.evidence-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.evidence-link:hover {
+  text-decoration: underline;
+}
+
+/* Sources Tab */
+.sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.source-category {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+}
+
+.source-category h5 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: var(--text-color);
+}
+
+.source-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.source-tag {
+  padding: 0.3rem 0.8rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 30px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.methodology-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.methodology-step {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.step-number {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: var(--background-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.step-content h5 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.step-content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Light theme adjustments */
+.light-theme .evidence-item {
+  background: #f5f5f5;
+}
+
+.light-theme .evidence-header {
+  background: #eeeeee;
+}
+
+.light-theme .score-visualization,
+.light-theme .analysis-summary,
+.light-theme .source-category,
+.light-theme .methodology-step {
+  background: #f5f5f5;
+}
