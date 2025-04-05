@@ -16,7 +16,7 @@ CORS(app)
 # Initialize NewsAPI
 # NEWS_API = os.getenv('NEWS_API_KEY')
 
-NEWS_API_KEY ="e5de620f7465479ea1d5dd485c998c2f"
+NEWS_API_KEY ="a2c207847cd74794bbf8b4fa66aff9b8"
 
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
 

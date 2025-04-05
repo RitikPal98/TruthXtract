@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "elegant-tangent-449817-a8",
+  "private_key_id": "7643c22441ef6ea4ce343c9f45f60311cf3e19d2",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDI57M9fOMR+RGl\nN0mXMVpUecBCXGq2zHUkjHJcn8EkRPaU/FmCoXoYN9ZcbqLlEtrUy3056HhgKjTC\neMc/qSXiq3TijgA2FVwbjAdQ+0bKD231wgRj56wMsi7YCMfGToeeVCCdtPRJF8JH\nqeCUX+PNVURsD+CDp5HM0eAmtGIFTR14S9kVA0LDfWHYmz+iJk6398ltrW+XASIZ\n8JpVj/voUHcx+nEOJIrbF4cCMDHiPSvzNiL5RMZYHUG0a+ZAxw+8iays20cBWBM1\niWD7l8/7TNNdqwlA2v8BI6vh8Jezsiz1gxJgOgvOPvE/USAHa+Sv0T/T4sXqWW9Z\nt56vaV2FAgMBAAECggEABlKYZvp7sPCcOA1d4Qa6F4d/X/dFmnwjwaMz5CtY6jnL\nYtPwQzauv31eXylSMhBeV60Rw1VIGIqrf2VKq/u4SAJqWsjqQ8l3TRyijE9kIm7K\n4J2bAsPjO8ENzVm1Y83L4dU284+i0nwPbq7vdOvxoOAql5YGVE5dPctrGPy7Svxc\nbtXXTGAq2WdWqXxx8LuBUGjjyKWh6RsXQIB8KsL68Gm3J6YsyuoObXfmuO/L3UAY\nc7ritnNLmlwUtlJdSlwOUY5Tv1quceiONCcU4QmJtHSUzpX45SzCWD6+Lp3Hpe5b\n04VYjZsVNc8n8Zjx6KPrJzF/8aXLL80TbAObY9S8HwKBgQD+mDEK5Mz8C/2Y/Yga\nZAjompz/rUzABtpVvwJCtSY/TnDKIPQe1UtRiqj2YWZOUgBHX4T+x53wkVMDu96g\ngEfTD1DfzFwNdL6EquuS0jLq9f0CqooS3w5U5z2k6z46vmJ46K2RzQiaNNSSWRAf\nLLuBYJu585xu+Oh0+H5mXfS8hwKBgQDKA6GlgwFPhUTRoMldUsmsYLomtrTlF4Fs\npW+3ulYJ4TloQhLdWdJK77Nd0g/65HWHchNELO8hCWuXOeRkQglcn7yUUTU2H+6A\n/IY35fHN33s5n5tpDUD2rvUODli2+2R2MM7KXvu427Z8196i8itbCpz2AFSiVcK/\nCeaRMlkEkwKBgQCGEf9BjVulH2tctaaGv0cxtroWqlxQg0tW/E9kcaDClbwvtUrZ\nMdmIB00S8he+BtC+xT50LQqvNNhSjwyd2O/55YbhU+zl6SSrGJcVqjvGH+QtE0HC\nzlPtwhhkUL1kkf2pTl6Y+TAehNOsfdpPkG7tosJfGjq29bz0XCe0IKZQ4QKBgE5h\nYlKppdSIzM7ZJ8gB2yX60b87nKxWlmzlM5eBwOhMbs249UDVHPbeUiXQ30plYgSP\nilIlbRLQaOJgH/GWfbNmdvDFIXRCp3N8h0cg/NT4JQOSneYAsngEIii2AE3e9He3\nMETs3ZY4CXIe/88RTykf0Q7RygTCabFd0gv8EPXpAoGBAJhUHPvcB6IPFXSTg26o\n3P7fYHKytgteosFHYZRRY4KQOUFqBs3Up2ZvwKV0Eg4sGEjir/pmCIPmLN/wa2VS\ngj23AIeDBshaX7drHwp3bhHpOmiSGAxUUJSe/rEhrlhMYj7aJWCwMFN40yIIXgcM\nJHnSc6UVPSR8p/JPZeJ7yJ3o\n-----END PRIVATE KEY-----\n",
+  "client_email": "speech-to-text@elegant-tangent-449817-a8.iam.gserviceaccount.com",
+  "client_id": "102547608958679426570",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/speech-to-text%40elegant-tangent-449817-a8.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
