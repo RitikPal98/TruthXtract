@@ -132,117 +132,170 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Display verification result
   function displayResult(result) {
+    const resultDiv = document.getElementById("result");
     const confidencePercent = (result.confidence * 100).toFixed(1);
-    const scorePercent = (result.score * 100).toFixed(1);
-    const verdict = result.isReal ? "REAL" : "FAKE";
+    const isBasicFact =
+      result.analysis && result.analysis.is_basic_fact === true;
+    const verdict = result.isReal
+      ? isBasicFact
+        ? "TRUE FACT"
+        : "REAL NEWS"
+      : isBasicFact
+      ? "FALSE STATEMENT"
+      : "FAKE NEWS";
 
-    // Create a more detailed analysis report
+    // Create a comprehensive report layout
     let html = `
       <div class="result-card ${result.isReal ? "real" : "fake"}">
         <div class="result-header">
-          <div class="result-summary">
-            <div class="result-stamp ${result.isReal ? "real" : "fake"}">
-              ${verdict}
-            </div>
+          <div class="verdict-container">
+            <div class="result-stamp ${
+              result.isReal ? "real" : "fake"
+            }">${verdict}</div>
             <div class="confidence-meter">
-              <div class="meter-label">Confidence: ${confidencePercent}%</div>
-              <div class="meter-bar">
-                <div class="meter-fill ${
+              <span class="confidence-label">Confidence: ${confidencePercent}%</span>
+              <div class="confidence-bar">
+                <div class="confidence-fill ${
                   result.isReal ? "real" : "fake"
                 }" style="width: ${confidencePercent}%"></div>
               </div>
             </div>
           </div>
         </div>
-
-        <div class="report-tabs">
-          <button class="tab-btn active" data-tab="analysis">Analysis</button>
-          <button class="tab-btn" data-tab="evidence">Evidence</button>
-          <button class="tab-btn" data-tab="sources">Sources</button>
+        
+        <div class="report-navigation">
+          <button class="report-nav-btn active" data-section="summary">Summary</button>
+          <button class="report-nav-btn" data-section="analysis">Analysis</button>
+          <button class="report-nav-btn" data-section="evidence">Evidence</button>
+          <button class="report-nav-btn" data-section="sources">Sources</button>
         </div>
-
-        <div class="report-content">
-          <div class="tab-panel active" id="analysis-panel">
-            <div class="score-visualization">
-              <div class="donut-chart-container">
-                <canvas id="scoreChart" width="200" height="200"></canvas>
+        
+        <div class="report-sections">
+          <!-- Summary Section -->
+          <div class="report-section active" id="summary-section">
+            <div class="summary-container">
+              <div class="summary-header">
+                <h3>Executive Summary</h3>
+                <div class="summary-metrics">
+                  <div class="summary-score ${result.isReal ? "real" : "fake"}">
+                    <div class="score-circle">
+                      <span class="score-value">${confidencePercent}</span>
+                      <span class="score-unit">%</span>
+                    </div>
+                    <span class="score-label">Trust Score</span>
+                  </div>
+                  <div class="verification-date">
+                    <span class="date-label">Verified on</span>
+                    <span class="date-value">${new Date().toLocaleDateString()}</span>
+                  </div>
+                </div>
               </div>
-              <div class="score-details">
-                <h4>Detailed Analysis</h4>
-                <ul class="score-breakdown-list">
-                  <li>
-                    <span class="score-label">AI Model Analysis:</span>
-                    <div class="score-bar">
-                      <div class="score-fill" style="width: ${(
-                        result.analysis.model_score * 100
-                      ).toFixed(1)}%"></div>
-                    </div>
-                    <span class="score-value">${(
-                      result.analysis.model_score * 100
-                    ).toFixed(1)}%</span>
-                  </li>
-                  <li>
-                    <span class="score-label">Fact Check Verification:</span>
-                    <div class="score-bar">
-                      <div class="score-fill" style="width: ${(
-                        result.analysis.fact_check_score * 100
-                      ).toFixed(1)}%"></div>
-                    </div>
-                    <span class="score-value">${(
-                      result.analysis.fact_check_score * 100
-                    ).toFixed(1)}%</span>
-                  </li>
-                  <li>
-                    <span class="score-label">Source Credibility:</span>
-                    <div class="score-bar">
-                      <div class="score-fill" style="width: ${(
-                        result.analysis.source_credibility * 100
-                      ).toFixed(1)}%"></div>
-                    </div>
-                    <span class="score-value">${(
-                      result.analysis.source_credibility * 100
-                    ).toFixed(1)}%</span>
-                  </li>
-                  ${
-                    result.analysis.verification_score
-                      ? `
-                  <li>
-                    <span class="score-label">External Verification:</span>
-                    <div class="score-bar">
-                      <div class="score-fill" style="width: ${(
-                        result.analysis.verification_score * 100
-                      ).toFixed(1)}%"></div>
-                    </div>
-                    <span class="score-value">${(
-                      result.analysis.verification_score * 100
-                    ).toFixed(1)}%</span>
-                  </li>`
-                      : ""
-                  }
-                </ul>
+              
+              <div class="summary-content">
+                <p class="summary-text">
+                  ${getSummaryText(result, isBasicFact)}
+                </p>
+                <div class="recommendation ${result.isReal ? "real" : "fake"}">
+                  ${getRecommendationText(result, isBasicFact)}
+                </div>
               </div>
-            </div>
-            
-            <div class="analysis-summary">
-              <h4>Summary</h4>
-              <p>This content has been analyzed and found to be <strong>${verdict}</strong> with ${confidencePercent}% confidence based on multiple verification methods including AI analysis, fact checking, and source credibility assessment.</p>
-              ${
-                result.isReal
-                  ? `<div class="recommendation real">This content appears to be credible and can be trusted.</div>`
-                  : `<div class="recommendation fake">This content contains misinformation and should not be trusted or shared.</div>`
-              }
             </div>
           </div>
-
-          <div class="tab-panel" id="evidence-panel">
+          
+          <!-- Analysis Section -->
+          <div class="report-section" id="analysis-section">
+            <h3>Detailed Analysis</h3>
+            <div class="analysis-metrics">
+              <div class="metrics-row">
+                <div class="metric-column">
+                  <div class="metric-visualizations">
+                    <div class="donut-chart-container">
+                      <canvas id="trust-score-chart" width="200" height="200"></canvas>
+                    </div>
+                    <div class="bar-chart-container">
+                      <canvas id="breakdown-chart" width="400" height="200"></canvas>
+                    </div>
+                  </div>
+                </div>
+                <div class="metric-column">
+                  <div class="score-breakdown">
+                    <h4>Analysis Components</h4>
+                    <ul class="breakdown-list">
+                      <li class="breakdown-item">
+                        <span class="breakdown-label">AI Content Analysis</span>
+                        <div class="breakdown-bar">
+                          <div class="breakdown-fill" style="width: ${(
+                            result.analysis.model_score * 100
+                          ).toFixed(1)}%"></div>
+                        </div>
+                        <span class="breakdown-value">${(
+                          result.analysis.model_score * 100
+                        ).toFixed(1)}%</span>
+                      </li>
+                      <li class="breakdown-item">
+                        <span class="breakdown-label">Fact Verification</span>
+                        <div class="breakdown-bar">
+                          <div class="breakdown-fill" style="width: ${(
+                            result.analysis.fact_check_score * 100
+                          ).toFixed(1)}%"></div>
+                        </div>
+                        <span class="breakdown-value">${(
+                          result.analysis.fact_check_score * 100
+                        ).toFixed(1)}%</span>
+                      </li>
+                      <li class="breakdown-item">
+                        <span class="breakdown-label">External Verification</span>
+                        <div class="breakdown-bar">
+                          <div class="breakdown-fill" style="width: ${(
+                            result.analysis.verification_score * 100
+                          ).toFixed(1)}%"></div>
+                        </div>
+                        <span class="breakdown-value">${(
+                          result.analysis.verification_score * 100
+                        ).toFixed(1)}%</span>
+                      </li>
+                      ${
+                        result.analysis.source_credibility
+                          ? `
+                      <li class="breakdown-item">
+                        <span class="breakdown-label">Source Credibility</span>
+                        <div class="breakdown-bar">
+                          <div class="breakdown-fill" style="width: ${(
+                            result.analysis.source_credibility * 100
+                          ).toFixed(1)}%"></div>
+                        </div>
+                        <span class="breakdown-value">${(
+                          result.analysis.source_credibility * 100
+                        ).toFixed(1)}%</span>
+                      </li>
+                      `
+                          : ""
+                      }
+                    </ul>
+                  </div>
+                  
+                  <div class="analysis-explanation">
+                    <h4>What This Means</h4>
+                    <p>${getAnalysisExplanation(result, isBasicFact)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Evidence Section -->
+          <div class="report-section" id="evidence-section">
+            <h3>Supporting Evidence</h3>
             <div class="evidence-container">
-              ${renderEnhancedEvidence(result.references, newsInput.value)}
+              ${renderEnhancedEvidence(result, isBasicFact)}
             </div>
           </div>
-
-          <div class="tab-panel" id="sources-panel">
+          
+          <!-- Sources Section -->
+          <div class="report-section" id="sources-section">
+            <h3>Sources & References</h3>
             <div class="sources-container">
-              ${renderSourcesInfo(result.references)}
+              ${renderSourcesInfo(result, isBasicFact)}
             </div>
           </div>
         </div>
@@ -251,11 +304,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     resultDiv.innerHTML = html;
 
-    // Initialize tabs functionality
-    initTabs();
+    // Initialize the report navigation
+    initReportNavigation();
 
-    // Create chart after DOM is updated
-    createScoreChart(result.analysis);
+    // Create the charts after the DOM is updated
+    createTrustScoreChart(result);
+    createBreakdownChart(result);
   }
 
   function renderReferences(references) {
@@ -861,5 +915,526 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     return matches / keywords.length;
+  }
+
+  // Initialize report navigation
+  function initReportNavigation() {
+    const navButtons = document.querySelectorAll(".report-nav-btn");
+    const reportSections = document.querySelectorAll(".report-section");
+
+    navButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        // Remove active class from all buttons and sections
+        navButtons.forEach((btn) => btn.classList.remove("active"));
+        reportSections.forEach((section) => section.classList.remove("active"));
+
+        // Add active class to clicked button
+        button.classList.add("active");
+
+        // Show the corresponding section
+        const sectionId = button.getAttribute("data-section") + "-section";
+        document.getElementById(sectionId).classList.add("active");
+      });
+    });
+  }
+
+  // Generate summary text based on results
+  function getSummaryText(result, isBasicFact) {
+    if (isBasicFact) {
+      return result.isReal
+        ? "Our analysis confirms this is a well-established factual statement that aligns with scientific consensus and verified information."
+        : "Our analysis indicates this statement contradicts established scientific knowledge and is generally considered incorrect.";
+    }
+
+    if (result.isReal) {
+      return "After analyzing multiple factors including content, source credibility, and cross-referencing with fact-checking databases, this content appears to be legitimate and trustworthy.";
+    } else {
+      return "Our comprehensive analysis has identified significant indicators of misinformation in this content. The combination of content analysis, fact-checking, and source verification suggests this information is not reliable.";
+    }
+  }
+
+  // Generate recommendation text
+  function getRecommendationText(result, isBasicFact) {
+    if (isBasicFact) {
+      return result.isReal
+        ? "This is a verified fact supported by established scientific knowledge."
+        : "This statement contradicts scientific consensus and should not be considered factual.";
+    }
+
+    if (result.isReal) {
+      return "This content appears to be reliable and can be shared with confidence.";
+    } else {
+      return "Exercise caution with this content as it contains misinformation and should not be shared without verification.";
+    }
+  }
+
+  // Generate analysis explanation
+  function getAnalysisExplanation(result, isBasicFact) {
+    if (isBasicFact) {
+      return result.isReal
+        ? "Our system has identified this as a basic factual statement that is consistently supported by authoritative sources and scientific consensus."
+        : "Our system has identified this as a common misconception that contradicts established scientific knowledge and reliable information sources.";
+    }
+
+    const highScoreThreshold = 0.7;
+
+    // Check which components have high scores
+    const highComponents = [];
+    if (result.analysis.model_score > highScoreThreshold)
+      highComponents.push("AI content analysis");
+    if (result.analysis.fact_check_score > highScoreThreshold)
+      highComponents.push("fact verification");
+    if (result.analysis.verification_score > highScoreThreshold)
+      highComponents.push("external verification");
+    if (result.analysis.source_credibility > highScoreThreshold)
+      highComponents.push("source credibility");
+
+    if (result.isReal) {
+      if (highComponents.length > 0) {
+        return `This content scored particularly well in ${highComponents.join(
+          ", "
+        )}, indicating strong reliability. The analysis suggests the information comes from credible sources and aligns with verified facts.`;
+      } else {
+        return "While this content passed our verification checks, it did so with moderate confidence. Consider consulting additional sources for complete confirmation.";
+      }
+    } else {
+      return "Our analysis detected patterns common in misleading content. The combination of linguistic markers, fact-checking results, and source verification indicates this information lacks credibility.";
+    }
+  }
+
+  // Create the trust score donut chart
+  function createTrustScoreChart(result) {
+    const canvas = document.getElementById("trust-score-chart");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    const confidencePercent = (result.confidence * 100).toFixed(1);
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Set up the chart
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(centerX, centerY) * 0.8;
+
+    // Draw background circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.fill();
+
+    // Draw progress arc
+    const startAngle = -Math.PI / 2; // Start at top
+    const endAngle = startAngle + Math.PI * 2 * (confidencePercent / 100);
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+    ctx.lineTo(centerX, centerY);
+    ctx.closePath();
+
+    // Use appropriate color based on result
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    if (result.isReal) {
+      gradient.addColorStop(0, "#00ff88");
+      gradient.addColorStop(1, "#00ccaa");
+    } else {
+      gradient.addColorStop(0, "#ff3366");
+      gradient.addColorStop(1, "#ff6b6b");
+    }
+
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Draw inner circle for donut effect
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = document.body.classList.contains("light-theme")
+      ? "#f5f5f5"
+      : "#13132f";
+    ctx.fill();
+
+    // Draw text
+    ctx.fillStyle = document.body.classList.contains("light-theme")
+      ? "#333"
+      : "#fff";
+    ctx.font = "bold 24px Inter";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(confidencePercent + "%", centerX, centerY - 10);
+
+    ctx.font = "14px Inter";
+    ctx.fillStyle = document.body.classList.contains("light-theme")
+      ? "#666"
+      : "#aaa";
+    ctx.fillText("Trust Score", centerX, centerY + 15);
+  }
+
+  // Create the breakdown bar chart
+  function createBreakdownChart(result) {
+    const canvas = document.getElementById("breakdown-chart");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Prepare data
+    const labels = ["AI Analysis", "Fact Check", "Verification"];
+    const data = [
+      (result.analysis.model_score * 100).toFixed(1),
+      (result.analysis.fact_check_score * 100).toFixed(1),
+      (result.analysis.verification_score * 100).toFixed(1),
+    ];
+
+    if (result.analysis.source_credibility) {
+      labels.push("Source Credibility");
+      data.push((result.analysis.source_credibility * 100).toFixed(1));
+    }
+
+    // Set up chart dimensions
+    const chartLeft = 120; // Space for labels
+    const chartRight = canvas.width - 50; // Space for values
+    const chartTop = 30;
+    const chartBottom = canvas.height - 30;
+    const chartWidth = chartRight - chartLeft;
+    const chartHeight = chartBottom - chartTop;
+    const barHeight = Math.min(30, (chartHeight / labels.length) * 0.7);
+    const barSpacing = chartHeight / labels.length;
+
+    // Draw title
+    ctx.fillStyle = document.body.classList.contains("light-theme")
+      ? "#333"
+      : "#fff";
+    ctx.font = "bold 16px Inter";
+    ctx.textAlign = "center";
+    ctx.fillText("Analysis Components", canvas.width / 2, 15);
+
+    // Draw bars
+    labels.forEach((label, i) => {
+      const barY = chartTop + i * barSpacing + barSpacing / 2 - barHeight / 2;
+
+      // Draw label
+      ctx.fillStyle = document.body.classList.contains("light-theme")
+        ? "#555"
+        : "#ddd";
+      ctx.font = "14px Inter";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, chartLeft - 10, barY + barHeight / 2);
+
+      // Draw background bar
+      ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.fillRect(chartLeft, barY, chartWidth, barHeight);
+
+      // Draw value bar
+      const gradient = ctx.createLinearGradient(chartLeft, 0, chartRight, 0);
+      gradient.addColorStop(0, result.isReal ? "#00ff88" : "#ff3366");
+      gradient.addColorStop(1, result.isReal ? "#00ccaa" : "#ff6b6b");
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(chartLeft, barY, chartWidth * (data[i] / 100), barHeight);
+
+      // Draw value text
+      ctx.fillStyle = document.body.classList.contains("light-theme")
+        ? "#333"
+        : "#fff";
+      ctx.textAlign = "left";
+      ctx.fillText(
+        data[i] + "%",
+        chartLeft + chartWidth * (data[i] / 100) + 5,
+        barY + barHeight / 2
+      );
+    });
+  }
+
+  // Render enhanced evidence with context awareness
+  function renderEnhancedEvidence(result, isBasicFact) {
+    if (isBasicFact) {
+      // For basic facts, show educational resources
+      return `
+        <div class="evidence-explainer">
+          <p>For fundamental facts like this, we've compiled educational resources that provide context and background information.</p>
+        </div>
+        <div class="evidence-grid">
+          <div class="evidence-item">
+            <div class="evidence-icon"><i class="fas fa-book"></i></div>
+            <div class="evidence-content">
+              <h4>Scientific Background</h4>
+              <p>${getFactExplanation(result)}</p>
+              <a href="https://en.wikipedia.org/wiki/Science" target="_blank" class="evidence-link">Learn more</a>
+            </div>
+          </div>
+          <div class="evidence-item">
+            <div class="evidence-icon"><i class="fas fa-graduation-cap"></i></div>
+            <div class="evidence-content">
+              <h4>Educational Resource</h4>
+              <p>Explore comprehensive educational content about this topic from trusted academic sources.</p>
+              <a href="https://www.khanacademy.org/" target="_blank" class="evidence-link">View resources</a>
+            </div>
+          </div>
+          <div class="evidence-item">
+            <div class="evidence-icon"><i class="fas fa-flask"></i></div>
+            <div class="evidence-content">
+              <h4>Research Foundation</h4>
+              <p>Discover the scientific research and consensus behind this factual information.</p>
+              <a href="https://www.nature.com/" target="_blank" class="evidence-link">Explore research</a>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // For news articles, show fact checks and similar articles
+    if (!result.references) {
+      return "<p>No supporting evidence could be found for this content.</p>";
+    }
+
+    let html = '<div class="evidence-sections">';
+
+    // Fact checks
+    if (
+      result.references.fact_check_claims &&
+      result.references.fact_check_claims.length > 0
+    ) {
+      html += `
+        <div class="evidence-section">
+          <h4>Fact Check Results</h4>
+          <div class="evidence-grid">
+      `;
+
+      result.references.fact_check_claims.forEach((claim) => {
+        html += `
+          <div class="evidence-item">
+            <div class="evidence-header">
+              <h5>${claim.title || "Fact Check"}</h5>
+            </div>
+            <div class="evidence-content">
+              <p>${
+                claim.text ||
+                "This claim has been fact-checked by a verified organization."
+              }</p>
+              <div class="evidence-meta">
+                ${
+                  claim.publisher
+                    ? `<span class="evidence-source">Source: ${claim.publisher.name}</span>`
+                    : ""
+                }
+                ${
+                  claim.claimDate
+                    ? `<span class="evidence-date">Date: ${new Date(
+                        claim.claimDate
+                      ).toLocaleDateString()}</span>`
+                    : ""
+                }
+              </div>
+              <a href="${
+                claim.url
+              }" target="_blank" class="evidence-link">View Full Fact Check</a>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
+    // Similar articles
+    if (
+      result.references.similar_articles &&
+      result.references.similar_articles.length > 0
+    ) {
+      html += `
+        <div class="evidence-section">
+          <h4>Related News Articles</h4>
+          <div class="evidence-grid">
+      `;
+
+      result.references.similar_articles.forEach((article) => {
+        html += `
+          <div class="evidence-item">
+            <div class="evidence-header">
+              <h5>${article.title || "Related Article"}</h5>
+            </div>
+            <div class="evidence-content">
+              ${
+                article.urlToImage
+                  ? `<img src="${article.urlToImage}" class="evidence-image" alt="${article.title}">`
+                  : ""
+              }
+              <p>${
+                article.description ||
+                "This article contains related information that provides context to the claim."
+              }</p>
+              <div class="evidence-meta">
+                ${
+                  article.source
+                    ? `<span class="evidence-source">Source: ${article.source.name}</span>`
+                    : ""
+                }
+                ${
+                  article.publishedAt
+                    ? `<span class="evidence-date">Date: ${new Date(
+                        article.publishedAt
+                      ).toLocaleDateString()}</span>`
+                    : ""
+                }
+              </div>
+              <a href="${
+                article.url
+              }" target="_blank" class="evidence-link">Read Full Article</a>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
+    html += "</div>";
+    return html;
+  }
+
+  // Generate fact explanation based on the input text
+  function getFactExplanation(result) {
+    const inputText = document
+      .getElementById("newsInput")
+      .value.toLowerCase()
+      .trim();
+
+    // Map of fact explanations
+    const factExplanations = {
+      "sun rises in the east":
+        "The Sun appears to rise in the east because Earth rotates from west to east. This is a fundamental astronomical observation that has been documented across human history and is consistent with our understanding of planetary motion.",
+
+      "earth is round":
+        "The Earth is approximately spherical (technically an oblate spheroid), which has been confirmed through multiple lines of evidence including ship observations, shadow measurements, circumnavigation, and space photography.",
+
+      "water boils at 100 degrees":
+        "Water boils at 100 degrees Celsius (212°F) at standard atmospheric pressure (1 atmosphere). This is a fundamental physical property that has been established through repeated scientific measurement.",
+
+      "earth revolves around the sun":
+        "Earth orbits the Sun in a slightly elliptical path, completing one revolution approximately every 365.25 days. This heliocentric model replaced the geocentric model and is supported by extensive astronomical observations.",
+    };
+
+    // Try to find a matching explanation
+    for (const [key, explanation] of Object.entries(factExplanations)) {
+      if (inputText.includes(key)) {
+        return explanation;
+      }
+    }
+
+    // Default explanation if no match found
+    return "This represents a well-established fact that has been repeatedly confirmed through scientific research, observation, and testing. Scientific facts are based on empirical evidence and are consistently supported by the scientific community.";
+  }
+
+  // Render source information
+  function renderSourcesInfo(result, isBasicFact) {
+    if (isBasicFact) {
+      // For basic facts, show authoritative sources
+      return `
+        <div class="sources-explainer">
+          <p>Verification of basic facts relies on established scientific sources and educational institutions.</p>
+        </div>
+        <div class="authority-sources">
+          <div class="authority-source">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Wikipedia-logo-v2-en.svg/225px-Wikipedia-logo-v2-en.svg.png" class="authority-logo" alt="Wikipedia">
+            <div class="authority-content">
+              <h4>Wikipedia</h4>
+              <p>A free online encyclopedia with articles written collaboratively by volunteers around the world.</p>
+              <a href="https://www.wikipedia.org/" target="_blank" class="source-link">Visit source</a>
+            </div>
+          </div>
+          <div class="authority-source">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/National_Geographic_logo.svg/1024px-National_Geographic_logo.svg.png" class="authority-logo" alt="National Geographic">
+            <div class="authority-content">
+              <h4>National Geographic</h4>
+              <p>A global nonprofit organization committed to exploring and protecting our planet.</p>
+              <a href="https://www.nationalgeographic.com/" target="_blank" class="source-link">Visit source</a>
+            </div>
+          </div>
+          <div class="authority-source">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_logo.svg/2449px-NASA_logo.svg.png" class="authority-logo" alt="NASA">
+            <div class="authority-content">
+              <h4>NASA</h4>
+              <p>The National Aeronautics and Space Administration is the U.S. government agency responsible for space exploration.</p>
+              <a href="https://www.nasa.gov/" target="_blank" class="source-link">Visit source</a>
+            </div>
+          </div>
+        </div>
+        <div class="methodology-section">
+          <h4>Verification Methodology</h4>
+          <p>Basic facts are verified using a combination of scientific consensus, educational resources, and authoritative references. Our system maintains a database of well-established facts against which claims are matched.</p>
+        </div>
+      `;
+    }
+
+    // For news articles, show sources and methodology
+    let html = `
+      <div class="sources-methodology">
+        <div class="methodology-section">
+          <h4>How We Verify Content</h4>
+          <p>Our verification process involves multiple steps to ensure comprehensive analysis:</p>
+          <div class="methodology-steps">
+            <div class="methodology-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <h5>AI Analysis</h5>
+                <p>Advanced machine learning models analyze the content's linguistic patterns, structure, and stylistic elements.</p>
+              </div>
+            </div>
+            <div class="methodology-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <h5>Fact Database Check</h5>
+                <p>Claims are cross-referenced with fact-checking databases from trusted verification organizations.</p>
+              </div>
+            </div>
+            <div class="methodology-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <h5>Source Verification</h5>
+                <p>We evaluate the credibility of sources based on their track record, transparency, and reputation.</p>
+              </div>
+            </div>
+            <div class="methodology-step">
+              <div class="step-number">4</div>
+              <div class="step-content">
+                <h5>Cross-Reference Analysis</h5>
+                <p>Information is compared with reporting from multiple independent and trusted sources.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+    // Add trusted sources if available
+    if (result.references && result.references.verification_sources) {
+      html += `
+        <div class="trusted-sources-section">
+          <h4>Trusted Sources Used</h4>
+          <p>Our verification relies on these established news organizations and fact-checking services:</p>
+          <div class="source-tags">
+      `;
+
+      result.references.verification_sources.forEach((source) => {
+        html += `<span class="source-tag">${source}</span>`;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
+    html += "</div>";
+    return html;
   }
 });
