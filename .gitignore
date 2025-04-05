@@ -1,2 +1,4 @@
 node_modules
 venv
+gemini-credentials.json
+__pycache__

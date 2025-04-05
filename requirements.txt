@@ -20,7 +20,7 @@ nltk
 regex
 
 # Utilities
-python-dotenv
+python-dotenv>=1.0.0
 tqdm
 pandas
 urllib3
@@ -34,3 +34,6 @@ packaging
 pytest  # for testing
 black  # for code formatting
 pylint  # for code linting
+
+# Add these for Google Gemini integration
+google-generativeai>=0.3.0

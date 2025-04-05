@@ -571,28 +571,73 @@ section h2 {
     background: linear-gradient(to right, var(--danger-color), #ff6d91);
 }
 
-/* Error Message */
+/* Enhanced Error Message */
 .error-message {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    color: var(--danger-color);
+    padding: 40px 30px;
+    margin: 20px auto;
+    background: rgba(255, 51, 102, 0.03);
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
     text-align: center;
-    padding: 3rem 2rem;
-    background: rgba(255, 51, 102, 0.07);
-    border-radius: var(--border-radius);
-    border: 1px solid rgba(255, 51, 102, 0.2);
+    width: 100%;
+    box-sizing: border-box;
+    border-left: 4px solid #ff3366;
+}
+
+.light-theme .error-message {
+    background: rgba(255, 51, 102, 0.02);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.03);
 }
 
 .error-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
+    font-size: 40px;
+    margin-bottom: 20px;
+    color: #ff3366;
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 51, 102, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .error-text {
-    font-size: 1.1rem;
+    font-size: 16px;
+    color: #555;
+    margin-bottom: 25px;
     font-weight: 500;
+    max-width: 80%;
+    line-height: 1.5;
+}
+
+.light-theme .error-text {
+    color: #444;
+}
+
+/* Style for retry button in error message */
+.error-message .glow-button {
+    margin-top: 5px;
+    padding: 10px 24px;
+    font-size: 14px;
+    background: linear-gradient(45deg, #ff3366, #ff5e85);
+    border: none;
+    box-shadow: 0 4px 15px rgba(255, 51, 102, 0.3);
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.error-message .glow-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 51, 102, 0.4);
+}
+
+.error-message .glow-button:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 8px rgba(255, 51, 102, 0.4);
 }
 
 /* Loading spinner */
@@ -642,7 +687,7 @@ section h2 {
     header {
         flex-direction: column;
         gap: 1.5rem;
-        text-align: center;
+    text-align: center;
     }
     
     .gallery-grid {
@@ -977,7 +1022,7 @@ body{
 
 /* Tab Panels */
 .report-content {
-  padding: 2rem;
+    padding: 2rem;
 }
 
 .tab-panel {
@@ -1043,7 +1088,7 @@ body{
 }
 
 .recommendation.fake {
-  background: rgba(255, 51, 102, 0.1);
+    background: rgba(255, 51, 102, 0.1);
   color: var(--danger-color);
   border-left: 4px solid var(--danger-color);
 }
@@ -1630,7 +1675,7 @@ body{
 
 @media (max-width: 768px) {
   .metrics-row {
-    grid-template-columns: 1fr;
+        grid-template-columns: 1fr;
   }
 }
 
@@ -1776,7 +1821,7 @@ body{
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+        font-size: 1.5rem;
   margin: 1.5rem auto;
   color: var(--primary-color);
 }
@@ -1838,9 +1883,9 @@ body{
   margin-top: 0;
   margin-bottom: 1rem;
   color: var(--text-color);
-  font-size: 1.2rem;
-}
-
+        font-size: 1.2rem;
+    }
+    
 /* Sources Section */
 .sources-container {
   display: flex;
@@ -1881,7 +1926,7 @@ body{
   height: 80px;
   object-fit: contain;
   background: white;
-  padding: 1rem;
+        padding: 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
@@ -2133,3 +2178,292 @@ body{
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+.gemini-attribution {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.gemini-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+/* Light theme adjustments for Gemini insights */
+.light-theme .insight-section,
+.light-theme .insight-item {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.light-theme .insight-icon {
+  background: rgba(108, 99, 255, 0.1);
+}
+
+.light-theme .insight-list.warning .insight-icon {
+  background: rgba(255, 51, 102, 0.1);
+}
+
+.light-theme .insight-list.factual .insight-icon {
+  background: rgba(0, 255, 136, 0.1);
+}
+
+.status-message {
+  padding: 12px 20px;
+  background-color: rgba(98, 0, 234, 0.05);
+  border-left: 4px solid #6200ea;
+  border-radius: 4px;
+  margin-bottom: 24px;
+  text-align: center;
+  color: #555;
+  width: 100%;
+  box-sizing: border-box;
+  font-weight: 500;
+}
+
+.light-theme .status-message {
+  background-color: rgba(98, 0, 234, 0.05);
+  color: #444;
+}
+
+.gallery-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+  width: 100%;
+  margin: 20px auto;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  position: relative;
+}
+
+.light-theme .gallery-loading {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.gallery-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 3px;
+  background: linear-gradient(to right, transparent, #6200ea, transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.loading-message {
+  margin-top: 24px;
+  color: #9e9e9e;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  max-width: 80%;
+  line-height: 1.4;
+}
+
+.light-theme .loading-message {
+  color: #555;
+}
+
+/* Modern Loading Spinner */
+.loading-spinner {
+  display: inline-block;
+  width: 64px;
+  height: 64px;
+  position: relative;
+}
+
+.loading-spinner:after,
+.loading-spinner:before {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.loading-spinner:before {
+  width: 64px;
+  height: 64px;
+  border: 4px solid rgba(98, 0, 234, 0.1);
+  border-top-color: #6200ea;
+  animation: spin 1.2s infinite;
+  top: 0;
+  left: 0;
+}
+
+.loading-spinner:after {
+  width: 40px;
+  height: 40px;
+  border: 4px solid transparent;
+  border-left-color: #6200ea;
+  border-bottom-color: #6200ea;
+  animation: spin-reverse 0.8s infinite;
+  top: 12px;
+  left: 12px;
+  opacity: 0.6;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spin-reverse {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+/* Enhanced Pulse Animation */
+@keyframes pulse {
+  0% { opacity: 0.5; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.5; transform: scale(0.98); }
+}
+
+/* Style for retry button in error message */
+.error-message .glow-button {
+  margin-top: 5px;
+  padding: 10px 24px;
+  font-size: 14px;
+  background: linear-gradient(45deg, #ff3366, #ff5e85);
+  border: none;
+  box-shadow: 0 4px 15px rgba(255, 51, 102, 0.3);
+  transition: all 0.3s ease;
+  font-weight: 600;
+}
+
+.error-message .glow-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 51, 102, 0.4);
+}
+
+.error-message .glow-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(255, 51, 102, 0.4);
+}
+
+/* Make news cards load with a staggered animation */
+.news-card {
+  animation: cardFadeIn 0.5s ease-out;
+  animation-fill-mode: both;
+}
+
+.news-card:nth-child(1) { animation-delay: 0.05s; }
+.news-card:nth-child(2) { animation-delay: 0.1s; }
+.news-card:nth-child(3) { animation-delay: 0.15s; }
+.news-card:nth-child(4) { animation-delay: 0.2s; }
+.news-card:nth-child(5) { animation-delay: 0.25s; }
+.news-card:nth-child(6) { animation-delay: 0.3s; }
+.news-card:nth-child(7) { animation-delay: 0.35s; }
+.news-card:nth-child(8) { animation-delay: 0.4s; }
+.news-card:nth-child(9) { animation-delay: 0.45s; }
+.news-card:nth-child(10) { animation-delay: 0.5s; }
+
+/* More responsive layout for news gallery */
+@media (max-width: 992px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 576px) {
+  .gallery-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Progress text in loading state */
+.progress-text {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #9e9e9e;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+  animation: pulse 2s infinite;
+}
+
+.light-theme .progress-text {
+  color: #757575;
+}
+
+/* Loading tips */
+.loading-tip {
+  margin-top: 40px;
+  padding: 15px 20px;
+  background: rgba(98, 0, 234, 0.08);
+  border-radius: 8px;
+  max-width: 80%;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: flex-start;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.loading-tip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tip-icon {
+  font-size: 18px;
+  margin-right: 10px;
+  line-height: 1.4;
+}
+
+.tip-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #555;
+  flex: 1;
+}
+
+.light-theme .loading-tip {
+  background: rgba(98, 0, 234, 0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.light-theme .tip-text {
+  color: #444;
+}
+
+/* Shimmer effect for container */
+.shimmer-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Responsive adjustments for loading state */
+@media (max-width: 768px) {
+  .gallery-loading {
+    padding: 40px 15px;
+  }
+  
+  .loading-message,
+  .loading-tip {
+    max-width: 95%;
+  }
+} 

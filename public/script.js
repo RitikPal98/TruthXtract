@@ -144,6 +144,13 @@ document.addEventListener("DOMContentLoaded", () => {
       ? "FALSE STATEMENT"
       : "FAKE NEWS";
 
+    // Determine if we have Gemini insights
+    const hasInsights =
+      result.insights &&
+      (result.insights.key_findings?.length > 0 ||
+        result.insights.misleading_elements?.length > 0 ||
+        result.insights.factual_claims?.length > 0);
+
     // Create a comprehensive report layout
     let html = `
       <div class="result-card ${result.isReal ? "real" : "fake"}">
@@ -166,6 +173,11 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="report-navigation">
           <button class="report-nav-btn active" data-section="summary">Summary</button>
           <button class="report-nav-btn" data-section="analysis">Analysis</button>
+          ${
+            hasInsights
+              ? `<button class="report-nav-btn" data-section="insights">AI Insights</button>`
+              : ""
+          }
           <button class="report-nav-btn" data-section="evidence">Evidence</button>
           <button class="report-nav-btn" data-section="sources">Sources</button>
         </div>
@@ -221,6 +233,23 @@ document.addEventListener("DOMContentLoaded", () => {
                   <div class="score-breakdown">
                     <h4>Analysis Components</h4>
                     <ul class="breakdown-list">
+                      ${
+                        result.analysis.gemini_score
+                          ? `
+                      <li class="breakdown-item">
+                        <span class="breakdown-label">Gemini AI Analysis</span>
+                        <div class="breakdown-bar">
+                          <div class="breakdown-fill" style="width: ${(
+                            result.analysis.gemini_score * 100
+                          ).toFixed(1)}%"></div>
+                        </div>
+                        <span class="breakdown-value">${(
+                          result.analysis.gemini_score * 100
+                        ).toFixed(1)}%</span>
+                      </li>
+                      `
+                          : ""
+                      }
                       <li class="breakdown-item">
                         <span class="breakdown-label">AI Content Analysis</span>
                         <div class="breakdown-bar">
@@ -282,6 +311,20 @@ document.addEventListener("DOMContentLoaded", () => {
               </div>
             </div>
           </div>
+          
+          ${
+            hasInsights
+              ? `
+          <!-- Gemini Insights Section -->
+          <div class="report-section" id="insights-section">
+            <h3>AI Insights (Powered by Google Gemini)</h3>
+            <div class="insights-container">
+              ${renderGeminiInsights(result.insights)}
+            </div>
+          </div>
+          `
+              : ""
+          }
           
           <!-- Evidence Section -->
           <div class="report-section" id="evidence-section">
@@ -348,40 +391,59 @@ document.addEventListener("DOMContentLoaded", () => {
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
       const response = await fetch(
-        `http://127.0.0.1:5000/api/news-gallery?t=${timestamp}`
+        `http://127.0.0.1:5000/api/news-gallery?per_page=10&t=${timestamp}`
       );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const news = await response.json();
+      const responseData = await response.json();
 
-      if (news.error) {
-        throw new Error(news.error);
+      if (responseData.error) {
+        throw new Error(responseData.error);
       }
 
-      displayGallery(news);
+      // Extract the news articles from the data property
+      const news = responseData.data || [];
+
+      // Handle loading state
+      if (responseData.status === "loading") {
+        showLoadingState(responseData.message || "Loading news...");
+        // Try again in 3 seconds if we're still loading
+        setTimeout(loadGallery, 3000);
+        return;
+      }
+
+      // Show message for partial data
+      if (responseData.status === "partial") {
+        displayGallery(news, responseData.message);
+      } else {
+        displayGallery(news);
+      }
     } catch (error) {
       console.error("Error:", error);
-      showError("Failed to load news gallery");
+      showError("Failed to load news gallery: " + error.message);
     } finally {
       loadingIndicator.classList.add("hidden");
     }
   }
 
   // Display gallery
-  function displayGallery(news) {
+  function displayGallery(news, statusMessage = null) {
     newsGallery.innerHTML = "";
-
-    if (news.error) {
-      showError(news.error);
-      return;
-    }
 
     if (!Array.isArray(news) || news.length === 0) {
       showError("No news articles available");
       return;
+    }
+
+    // Show status message if one was provided
+    if (statusMessage) {
+      const statusDiv = document.createElement("div");
+      statusDiv.className = "status-message";
+      statusDiv.textContent = statusMessage;
+      newsGallery.appendChild(statusDiv);
     }
 
     news.forEach((article) => {
@@ -415,7 +477,9 @@ document.addEventListener("DOMContentLoaded", () => {
           <p class="news-description">${article.description}</p>
           <div class="news-meta">
                     ${sourceType}
-            <span class="news-source">${article.source}</span>
+            <span class="news-source">${
+              article.source || article.source?.name || "Unknown"
+            }</span>
             <span class="news-date">${new Date(
               article.publishedAt
             ).toLocaleDateString()}</span>
@@ -433,12 +497,95 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      card.addEventListener("click", () => {
-        window.open(article.url, "_blank");
-      });
+      // Only add click handler if there's a valid URL
+      if (article.url && article.url !== "#") {
+        card.addEventListener("click", () => {
+          window.open(article.url, "_blank");
+        });
+      }
 
       newsGallery.appendChild(card);
     });
+  }
+
+  // Show loading state with spinner
+  function showLoadingState(message) {
+    const loadingDiv = document.createElement("div");
+    loadingDiv.className = "gallery-loading";
+
+    // Create shimmer effect container
+    const shimmerContainer = document.createElement("div");
+    shimmerContainer.className = "shimmer-container";
+
+    // Create spinner
+    const spinner = document.createElement("div");
+    spinner.className = "loading-spinner";
+
+    // Create message with animation
+    const messageEl = document.createElement("p");
+    messageEl.className = "loading-message";
+    messageEl.textContent = message || "Loading latest news...";
+
+    // Create progress indicator
+    const progressTextEl = document.createElement("div");
+    progressTextEl.className = "progress-text";
+    progressTextEl.innerHTML = "Analyzing news sources";
+
+    // Add dot animation to progress text
+    animateDots(progressTextEl);
+
+    // Assemble the loading state
+    loadingDiv.appendChild(spinner);
+    loadingDiv.appendChild(messageEl);
+    loadingDiv.appendChild(progressTextEl);
+
+    // Clear and add to news gallery
+    newsGallery.innerHTML = "";
+    newsGallery.appendChild(loadingDiv);
+
+    // Show tips after a short delay
+    setTimeout(() => {
+      if (document.querySelector(".gallery-loading")) {
+        const tipEl = document.createElement("div");
+        tipEl.className = "loading-tip";
+        tipEl.innerHTML = getRandomTip();
+        loadingDiv.appendChild(tipEl);
+
+        // Fade in the tip
+        setTimeout(() => tipEl.classList.add("show"), 100);
+      }
+    }, 2500);
+  }
+
+  // Animate dots for loading text
+  function animateDots(element) {
+    let dots = 0;
+    const maxDots = 3;
+    const interval = setInterval(() => {
+      // Only continue if element still exists in DOM
+      if (!element || !document.body.contains(element)) {
+        clearInterval(interval);
+        return;
+      }
+
+      const text = element.textContent.replace(/\.+$/, "");
+      dots = (dots + 1) % (maxDots + 1);
+      element.textContent = text + ".".repeat(dots);
+    }, 500);
+  }
+
+  // Random tips for loading screen
+  function getRandomTip() {
+    const tips = [
+      "TruthXtract combines AI and fact-checking databases to verify news",
+      "Our system checks multiple sources to determine content reliability",
+      "News credibility is measured on several factors including source reputation",
+      "We analyze linguistic patterns that are common in fake news",
+      "The confidence score shows how certain we are about the verification result",
+    ];
+    return `<span class="tip-icon">💡</span> <span class="tip-text">${
+      tips[Math.floor(Math.random() * tips.length)]
+    }</span>`;
   }
 
   // Show error message
@@ -448,9 +595,15 @@ document.addEventListener("DOMContentLoaded", () => {
     errorDiv.innerHTML = `
         <div class="error-icon">⚠️</div>
         <div class="error-text">${message}</div>
+        <button id="retryButton" class="glow-button">Retry</button>
     `;
     newsGallery.innerHTML = "";
     newsGallery.appendChild(errorDiv);
+
+    // Add event listener to retry button
+    document
+      .getElementById("retryButton")
+      .addEventListener("click", loadGallery);
   }
 
   // Refresh gallery button with debounce
@@ -1068,6 +1221,15 @@ document.addEventListener("DOMContentLoaded", () => {
       ? "#666"
       : "#aaa";
     ctx.fillText("Trust Score", centerX, centerY + 15);
+
+    // Add "Powered by Gemini" if Gemini score is present
+    if (result.analysis.gemini_score !== undefined) {
+      ctx.font = "10px Inter";
+      ctx.fillStyle = document.body.classList.contains("light-theme")
+        ? "#8e24aa"
+        : "#ab47bc";
+      ctx.fillText("Enhanced by Gemini AI", centerX, centerY + 35);
+    }
   }
 
   // Create the breakdown bar chart
@@ -1081,12 +1243,24 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Prepare data
-    const labels = ["AI Analysis", "Fact Check", "Verification"];
-    const data = [
-      (result.analysis.model_score * 100).toFixed(1),
-      (result.analysis.fact_check_score * 100).toFixed(1),
-      (result.analysis.verification_score * 100).toFixed(1),
-    ];
+    const labels = [];
+    const data = [];
+
+    // Add Gemini score if available
+    if (result.analysis.gemini_score !== undefined) {
+      labels.push("Gemini AI");
+      data.push((result.analysis.gemini_score * 100).toFixed(1));
+    }
+
+    // Add other analysis components
+    labels.push("AI Analysis");
+    data.push((result.analysis.model_score * 100).toFixed(1));
+
+    labels.push("Fact Check");
+    data.push((result.analysis.fact_check_score * 100).toFixed(1));
+
+    labels.push("Verification");
+    data.push((result.analysis.verification_score * 100).toFixed(1));
 
     if (result.analysis.source_credibility) {
       labels.push("Source Credibility");
@@ -1130,8 +1304,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Draw value bar
       const gradient = ctx.createLinearGradient(chartLeft, 0, chartRight, 0);
-      gradient.addColorStop(0, result.isReal ? "#00ff88" : "#ff3366");
-      gradient.addColorStop(1, result.isReal ? "#00ccaa" : "#ff6b6b");
+
+      // Use different color for Gemini
+      if (label === "Gemini AI") {
+        gradient.addColorStop(0, "#8e24aa"); // Purple for Gemini
+        gradient.addColorStop(1, "#ab47bc");
+      } else {
+        gradient.addColorStop(0, result.isReal ? "#00ff88" : "#ff3366");
+        gradient.addColorStop(1, result.isReal ? "#00ccaa" : "#ff6b6b");
+      }
 
       ctx.fillStyle = gradient;
       ctx.fillRect(chartLeft, barY, chartWidth * (data[i] / 100), barHeight);
@@ -1149,290 +1330,84 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Render enhanced evidence with context awareness
-  function renderEnhancedEvidence(result, isBasicFact) {
-    if (isBasicFact) {
-      // For basic facts, show educational resources
-      return `
-        <div class="evidence-explainer">
-          <p>For fundamental facts like this, we've compiled educational resources that provide context and background information.</p>
-        </div>
-        <div class="evidence-grid">
-          <div class="evidence-item">
-            <div class="evidence-icon"><i class="fas fa-book"></i></div>
-            <div class="evidence-content">
-              <h4>Scientific Background</h4>
-              <p>${getFactExplanation(result)}</p>
-              <a href="https://en.wikipedia.org/wiki/Science" target="_blank" class="evidence-link">Learn more</a>
-            </div>
-          </div>
-          <div class="evidence-item">
-            <div class="evidence-icon"><i class="fas fa-graduation-cap"></i></div>
-            <div class="evidence-content">
-              <h4>Educational Resource</h4>
-              <p>Explore comprehensive educational content about this topic from trusted academic sources.</p>
-              <a href="https://www.khanacademy.org/" target="_blank" class="evidence-link">View resources</a>
-            </div>
-          </div>
-          <div class="evidence-item">
-            <div class="evidence-icon"><i class="fas fa-flask"></i></div>
-            <div class="evidence-content">
-              <h4>Research Foundation</h4>
-              <p>Discover the scientific research and consensus behind this factual information.</p>
-              <a href="https://www.nature.com/" target="_blank" class="evidence-link">Explore research</a>
-            </div>
-          </div>
+  // Function to render Gemini insights
+  function renderGeminiInsights(insights) {
+    if (!insights) return "<p>No AI insights available for this content.</p>";
+
+    let html = '<div class="gemini-insights">';
+
+    // Key findings
+    if (insights.key_findings && insights.key_findings.length > 0) {
+      html += `
+        <div class="insight-section">
+          <h4>Key Findings</h4>
+          <ul class="insight-list">
+            ${insights.key_findings
+              .map(
+                (finding) => `
+              <li class="insight-item">
+                <div class="insight-icon"><i class="fas fa-lightbulb"></i></div>
+                <div class="insight-content">${finding}</div>
+              </li>
+            `
+              )
+              .join("")}
+          </ul>
         </div>
       `;
     }
 
-    // For news articles, show fact checks and similar articles
-    if (!result.references) {
-      return "<p>No supporting evidence could be found for this content.</p>";
-    }
-
-    let html = '<div class="evidence-sections">';
-
-    // Fact checks
+    // Misleading elements
     if (
-      result.references.fact_check_claims &&
-      result.references.fact_check_claims.length > 0
+      insights.misleading_elements &&
+      insights.misleading_elements.length > 0
     ) {
       html += `
-        <div class="evidence-section">
-          <h4>Fact Check Results</h4>
-          <div class="evidence-grid">
-      `;
-
-      result.references.fact_check_claims.forEach((claim) => {
-        html += `
-          <div class="evidence-item">
-            <div class="evidence-header">
-              <h5>${claim.title || "Fact Check"}</h5>
-            </div>
-            <div class="evidence-content">
-              <p>${
-                claim.text ||
-                "This claim has been fact-checked by a verified organization."
-              }</p>
-              <div class="evidence-meta">
-                ${
-                  claim.publisher
-                    ? `<span class="evidence-source">Source: ${claim.publisher.name}</span>`
-                    : ""
-                }
-                ${
-                  claim.claimDate
-                    ? `<span class="evidence-date">Date: ${new Date(
-                        claim.claimDate
-                      ).toLocaleDateString()}</span>`
-                    : ""
-                }
-              </div>
-              <a href="${
-                claim.url
-              }" target="_blank" class="evidence-link">View Full Fact Check</a>
-            </div>
-          </div>
-        `;
-      });
-
-      html += `
-          </div>
+        <div class="insight-section">
+          <h4>Potential Misleading Elements</h4>
+          <ul class="insight-list warning">
+            ${insights.misleading_elements
+              .map(
+                (element) => `
+              <li class="insight-item">
+                <div class="insight-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="insight-content">${element}</div>
+              </li>
+            `
+              )
+              .join("")}
+          </ul>
         </div>
       `;
     }
 
-    // Similar articles
-    if (
-      result.references.similar_articles &&
-      result.references.similar_articles.length > 0
-    ) {
+    // Factual claims
+    if (insights.factual_claims && insights.factual_claims.length > 0) {
       html += `
-        <div class="evidence-section">
-          <h4>Related News Articles</h4>
-          <div class="evidence-grid">
-      `;
-
-      result.references.similar_articles.forEach((article) => {
-        html += `
-          <div class="evidence-item">
-            <div class="evidence-header">
-              <h5>${article.title || "Related Article"}</h5>
-            </div>
-            <div class="evidence-content">
-              ${
-                article.urlToImage
-                  ? `<img src="${article.urlToImage}" class="evidence-image" alt="${article.title}">`
-                  : ""
-              }
-              <p>${
-                article.description ||
-                "This article contains related information that provides context to the claim."
-              }</p>
-              <div class="evidence-meta">
-                ${
-                  article.source
-                    ? `<span class="evidence-source">Source: ${article.source.name}</span>`
-                    : ""
-                }
-                ${
-                  article.publishedAt
-                    ? `<span class="evidence-date">Date: ${new Date(
-                        article.publishedAt
-                      ).toLocaleDateString()}</span>`
-                    : ""
-                }
-              </div>
-              <a href="${
-                article.url
-              }" target="_blank" class="evidence-link">Read Full Article</a>
-            </div>
-          </div>
-        `;
-      });
-
-      html += `
-          </div>
+        <div class="insight-section">
+          <h4>Verifiable Claims</h4>
+          <ul class="insight-list factual">
+            ${insights.factual_claims
+              .map(
+                (claim) => `
+              <li class="insight-item">
+                <div class="insight-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="insight-content">${claim}</div>
+              </li>
+            `
+              )
+              .join("")}
+          </ul>
         </div>
       `;
     }
 
-    html += "</div>";
-    return html;
-  }
-
-  // Generate fact explanation based on the input text
-  function getFactExplanation(result) {
-    const inputText = document
-      .getElementById("newsInput")
-      .value.toLowerCase()
-      .trim();
-
-    // Map of fact explanations
-    const factExplanations = {
-      "sun rises in the east":
-        "The Sun appears to rise in the east because Earth rotates from west to east. This is a fundamental astronomical observation that has been documented across human history and is consistent with our understanding of planetary motion.",
-
-      "earth is round":
-        "The Earth is approximately spherical (technically an oblate spheroid), which has been confirmed through multiple lines of evidence including ship observations, shadow measurements, circumnavigation, and space photography.",
-
-      "water boils at 100 degrees":
-        "Water boils at 100 degrees Celsius (212°F) at standard atmospheric pressure (1 atmosphere). This is a fundamental physical property that has been established through repeated scientific measurement.",
-
-      "earth revolves around the sun":
-        "Earth orbits the Sun in a slightly elliptical path, completing one revolution approximately every 365.25 days. This heliocentric model replaced the geocentric model and is supported by extensive astronomical observations.",
-    };
-
-    // Try to find a matching explanation
-    for (const [key, explanation] of Object.entries(factExplanations)) {
-      if (inputText.includes(key)) {
-        return explanation;
-      }
-    }
-
-    // Default explanation if no match found
-    return "This represents a well-established fact that has been repeatedly confirmed through scientific research, observation, and testing. Scientific facts are based on empirical evidence and are consistently supported by the scientific community.";
-  }
-
-  // Render source information
-  function renderSourcesInfo(result, isBasicFact) {
-    if (isBasicFact) {
-      // For basic facts, show authoritative sources
-      return `
-        <div class="sources-explainer">
-          <p>Verification of basic facts relies on established scientific sources and educational institutions.</p>
-        </div>
-        <div class="authority-sources">
-          <div class="authority-source">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Wikipedia-logo-v2-en.svg/225px-Wikipedia-logo-v2-en.svg.png" class="authority-logo" alt="Wikipedia">
-            <div class="authority-content">
-              <h4>Wikipedia</h4>
-              <p>A free online encyclopedia with articles written collaboratively by volunteers around the world.</p>
-              <a href="https://www.wikipedia.org/" target="_blank" class="source-link">Visit source</a>
-            </div>
-          </div>
-          <div class="authority-source">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/National_Geographic_logo.svg/1024px-National_Geographic_logo.svg.png" class="authority-logo" alt="National Geographic">
-            <div class="authority-content">
-              <h4>National Geographic</h4>
-              <p>A global nonprofit organization committed to exploring and protecting our planet.</p>
-              <a href="https://www.nationalgeographic.com/" target="_blank" class="source-link">Visit source</a>
-            </div>
-          </div>
-          <div class="authority-source">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_logo.svg/2449px-NASA_logo.svg.png" class="authority-logo" alt="NASA">
-            <div class="authority-content">
-              <h4>NASA</h4>
-              <p>The National Aeronautics and Space Administration is the U.S. government agency responsible for space exploration.</p>
-              <a href="https://www.nasa.gov/" target="_blank" class="source-link">Visit source</a>
-            </div>
-          </div>
-        </div>
-        <div class="methodology-section">
-          <h4>Verification Methodology</h4>
-          <p>Basic facts are verified using a combination of scientific consensus, educational resources, and authoritative references. Our system maintains a database of well-established facts against which claims are matched.</p>
-        </div>
-      `;
-    }
-
-    // For news articles, show sources and methodology
-    let html = `
-      <div class="sources-methodology">
-        <div class="methodology-section">
-          <h4>How We Verify Content</h4>
-          <p>Our verification process involves multiple steps to ensure comprehensive analysis:</p>
-          <div class="methodology-steps">
-            <div class="methodology-step">
-              <div class="step-number">1</div>
-              <div class="step-content">
-                <h5>AI Analysis</h5>
-                <p>Advanced machine learning models analyze the content's linguistic patterns, structure, and stylistic elements.</p>
-              </div>
-            </div>
-            <div class="methodology-step">
-              <div class="step-number">2</div>
-              <div class="step-content">
-                <h5>Fact Database Check</h5>
-                <p>Claims are cross-referenced with fact-checking databases from trusted verification organizations.</p>
-              </div>
-            </div>
-            <div class="methodology-step">
-              <div class="step-number">3</div>
-              <div class="step-content">
-                <h5>Source Verification</h5>
-                <p>We evaluate the credibility of sources based on their track record, transparency, and reputation.</p>
-              </div>
-            </div>
-            <div class="methodology-step">
-              <div class="step-number">4</div>
-              <div class="step-content">
-                <h5>Cross-Reference Analysis</h5>
-                <p>Information is compared with reporting from multiple independent and trusted sources.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-    // Add trusted sources if available
-    if (result.references && result.references.verification_sources) {
-      html += `
-        <div class="trusted-sources-section">
-          <h4>Trusted Sources Used</h4>
-          <p>Our verification relies on these established news organizations and fact-checking services:</p>
-          <div class="source-tags">
-      `;
-
-      result.references.verification_sources.forEach((source) => {
-        html += `<span class="source-tag">${source}</span>`;
-      });
-
-      html += `
-          </div>
-        </div>
-      `;
-    }
+    html += `
+      <div class="gemini-attribution">
+        <img src="https://storage.googleapis.com/gweb-uniblog-publish-prod/images/gemini_1.max-1000x1000.png" alt="Google Gemini logo" class="gemini-logo">
+        <span>Insights powered by Google Gemini AI</span>
+      </div>
+    `;
 
     html += "</div>";
     return html;
