@@ -10,6 +10,8 @@ import torch
 from bs4 import BeautifulSoup
 import numpy as np
 import os
+from gemini_helper import analyze_content_with_gemini
+
 app = Flask(__name__)
 CORS(app)
 
@@ -123,20 +125,46 @@ def check_if_basic_fact(text):
     # Normalize text for matching
     text_lower = text.lower().strip().replace(".", "").replace("!", "").replace("?", "")
     
-    # Dictionary of well-known facts
+    # Dictionary of well-known facts (both true and false)
     BASIC_FACTS = {
+        # Astronomical facts
         "sun rises in the east": 1.0,
         "the sun rises in the east": 1.0,
+        "sun sets in the west": 1.0,
+        "the sun sets in the west": 1.0,
         "earth revolves around the sun": 1.0,
         "the earth revolves around the sun": 1.0,
-        "water boils at 100 degrees": 1.0,
-        "water freezes at 0 degrees": 1.0,
+        "the moon orbits the earth": 1.0,
         "earth is round": 1.0,
         "the earth is round": 1.0,
-        "humans need oxygen to survive": 1.0,
-        "earth is flat": 0.0,  # This is a false statement
+        "earth is flat": 0.0,
         "the earth is flat": 0.0,
-        "vaccines cause autism": 0.0,  # This is a false statement
+        
+        # Physical facts
+        "water boils at 100 degrees": 1.0,
+        "water boils at 100 degrees celsius": 1.0,
+        "water freezes at 0 degrees": 1.0,
+        "water freezes at 0 degrees celsius": 1.0,
+        "speed of light is 299792458 meters per second": 1.0,
+        
+        # Biological facts
+        "humans need oxygen to survive": 1.0,
+        "plants produce oxygen": 1.0,
+        "humans have two lungs": 1.0,
+        "human heart pumps blood": 1.0,
+        
+        # Geographical facts
+        "mount everest is the tallest mountain": 1.0,
+        "pacific is the largest ocean": 1.0,
+        "there are seven continents": 1.0,
+        
+        # Common misconceptions (false facts)
+        "vaccines cause autism": 0.0,
+        "5g causes covid": 0.0,
+        "covid is a hoax": 0.0,
+        "the moon landing was fake": 0.0,
+        "the moon landing was staged": 0.0,
+        "climate change is a hoax": 0.0
     }
     
     # Check for exact match
@@ -145,15 +173,15 @@ def check_if_basic_fact(text):
     
     # Check if the text contains a basic fact
     for fact, verdict in BASIC_FACTS.items():
-        if fact in text_lower or text_lower in fact:
-            # If there's significant overlap, consider it a match
+        # Only match if the fact is a substantial part of the text
+        if fact in text_lower and len(fact) > 10 and len(fact) > len(text_lower) / 2:
             return True, verdict
     
     # Not a recognized basic fact
     return False, 0.5
 
 def analyze_text(text, source="", url=""):
-    """Main analysis function with basic fact detection"""
+    """Enhanced analysis function with Gemini AI integration"""
     try:
         # First, check if this is a basic, well-known fact
         is_basic_fact, fact_verdict = check_if_basic_fact(text)
@@ -167,9 +195,14 @@ def analyze_text(text, source="", url=""):
                 'is_basic_fact': True
             }
             
-        # 1. Model Prediction
+        # Get Gemini analysis
+        gemini_results = analyze_content_with_gemini(text, "verify")
+        gemini_score = gemini_results.get('score', 0.5)
+        gemini_confidence = gemini_results.get('confidence', 0.6)
+        
+        # 1. Traditional Model Prediction
         model_scores = analyze_with_model(text)
-        real_prob = model_scores[1]  # Assuming index 1 is for real news
+        traditional_score = model_scores[1]  # Assuming index 1 is for real news
         
         # 2. Fact Checking
         fact_checked, claims = check_with_fact_checking_sites(text)
@@ -178,20 +211,43 @@ def analyze_text(text, source="", url=""):
         # 3. External Verification
         verification_score = verify_with_external_sources(text)
         
-        # Combine scores with emphasis on model prediction
-        final_score = (real_prob * 0.6 + 
-                      fact_check_score * 0.2 + 
-                      verification_score * 0.2)
+        # 4. Source Credibility Check
+        source_lower = source.lower()
+        source_credibility = RELIABLE_SOURCES.get(source_lower, 0.5)
+        
+        # Combine all signals with appropriate weightings
+        # Give Gemini a significant weight due to its advanced capabilities
+        final_score = (
+            gemini_score * 0.4 +            # Gemini analysis (40%)
+            traditional_score * 0.2 +       # Traditional ML model (20%)
+            fact_check_score * 0.2 +        # Fact checking (20%)
+            verification_score * 0.1 +      # External verification (10%)
+            source_credibility * 0.1        # Source credibility (10%)
+        )
         
         # Calculate confidence based on agreement between different methods
-        scores = [real_prob, fact_check_score, verification_score]
-        confidence = 1 - np.std(scores)
+        scores = [gemini_score, traditional_score, fact_check_score, verification_score, source_credibility]
+        confidence = max(gemini_confidence, 1 - np.std(scores))
+        
+        # Extract factual claims from Gemini
+        factual_claims = gemini_results.get('factual_claims', [])
+        
+        # Extract key findings to include in analysis
+        key_findings = gemini_results.get('key_findings', [])
+        
+        # Extract misleading elements if any
+        misleading_elements = gemini_results.get('misleading_elements', [])
         
         return final_score, confidence, {
-            'model_score': float(real_prob),
+            'model_score': float(traditional_score),
+            'gemini_score': float(gemini_score),
             'fact_check_score': float(fact_check_score),
             'verification_score': float(verification_score),
+            'source_credibility': float(source_credibility),
             'claims_found': len(claims) if claims else 0,
+            'factual_claims': factual_claims,
+            'key_findings': key_findings,
+            'misleading_elements': misleading_elements,
             'is_basic_fact': False
         }
         
@@ -252,10 +308,17 @@ def get_news_gallery():
     try:
         all_articles = []
         
+        # Define multiple source groups
+        NEWS_SOURCES = {
+            'mainstream': 'timesofindia.indiatimes.com,hindustantimes.com,indianexpress.com,ndtv.com',
+            'business': 'economictimes.indiatimes.com,livemint.com,business-standard.com',
+            'regional': 'thehindu.com,deccanherald.com,telegraphindia.com',
+            'international': 'reuters.com,apnews.com,bbc.co.uk,aljazeera.com'
+        }
+        
         # Fetch from each source group
         for source_type, domains in NEWS_SOURCES.items():
             try:
-                # Add date range to get more recent news
                 source_news = newsapi.get_everything(
                     domains=domains,
                     language='en',
@@ -274,9 +337,9 @@ def get_news_gallery():
                 print(f"Error fetching {source_type} news: {str(e)}")
                 continue
 
-        # Remove duplicates and process articles
-        seen_titles = set()
+        # Process articles with Gemini enhancement
         processed_news = []
+        seen_titles = set()
         
         for article in all_articles:
             try:
@@ -292,14 +355,26 @@ def get_news_gallery():
                 source_name = article.get('source', {}).get('name', '')
                 url = article.get('url', '')
 
+                # Get classification from Gemini for better categorization
+                classification = analyze_content_with_gemini(text, "classify")
+                
                 # Analyze the article
                 final_score, confidence, analysis = analyze_text(text, source_name, url)
 
-                # Calculate priority score
+                # Get category and topics from Gemini analysis
+                category = classification.get('category', article.get('source_type', 'general'))
+                key_topics = classification.get('key_topics', [])
+                tone = classification.get('tone', 'neutral')
+                
+                # Calculate priority score based on tone and topic
                 priority_score = 0
-                for topic, keywords in PRIORITY_TOPICS.items():
-                    if any(keyword.lower() in text.lower() for keyword in keywords):
-                        priority_score += 1
+                if tone in ['inflammatory', 'sensationalist']:
+                    priority_score += 1
+                
+                # Important topics deserve higher priority
+                important_topics = ['election', 'emergency', 'disaster', 'crisis', 'breaking']
+                if any(topic in str(key_topics).lower() for topic in important_topics):
+                    priority_score += 2
 
                 processed_news.append({
                     'title': article['title'],
@@ -312,7 +387,9 @@ def get_news_gallery():
                     'confidence': float(confidence),
                     'score': float(final_score),
                     'analysis': analysis,
-                    'category': article.get('source_type', 'general'),
+                    'category': category,
+                    'topics': key_topics,
+                    'tone': tone,
                     'priorityScore': priority_score,
                     'isAlert': priority_score > 1
                 })
@@ -351,7 +428,7 @@ def predict():
                 'error': 'No news text provided'
             })
 
-        # Get analysis results
+        # Get enhanced analysis results with Gemini
         final_score, confidence, analysis = analyze_text(text)
         
         # Get fact-checking references
@@ -365,6 +442,13 @@ def predict():
             page_size=3
         )
         
+        # Add Gemini-specific insights
+        gemini_insights = {
+            'key_findings': analysis.get('key_findings', []),
+            'misleading_elements': analysis.get('misleading_elements', []),
+            'factual_claims': analysis.get('factual_claims', []),
+        }
+        
         return jsonify({
             'status': 'success',
             'isReal': final_score > 0.5,
@@ -372,11 +456,14 @@ def predict():
             'score': float(final_score),
             'analysis': {
                 'model_score': float(analysis.get('model_score', 0)),
+                'gemini_score': float(analysis.get('gemini_score', 0)),
                 'fact_check_score': float(analysis.get('fact_check_score', 0)),
                 'verification_score': float(analysis.get('verification_score', 0)),
                 'source_credibility': float(analysis.get('source_credibility', 0)),
-                'claims_found': analysis.get('claims_found', 0)
+                'claims_found': analysis.get('claims_found', 0),
+                'is_basic_fact': analysis.get('is_basic_fact', False)
             },
+            'insights': gemini_insights,
             'references': {
                 'fact_check_claims': claims,
                 'similar_articles': similar_news.get('articles', []),
