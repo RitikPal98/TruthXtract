@@ -14,8 +14,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Initialize NewsAPI
-# NEWS_API_KEY = os.getenv('NEWS_API_KEY')
-NEWS_API_KEY ="6c0750539669455db0200bb80a16149f"
+# NEWS_API = os.getenv('NEWS_API_KEY')
+
+NEWS_API_KEY ="e5de620f7465479ea1d5dd485c998c2f"
 
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
 
@@ -27,7 +28,7 @@ model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
 
 # Google Fact Check API
 FACT_CHECK_API = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
-# GOOGLE_API_KEY = 'AIzaSyD4SEh7nbHK0D6dSUUEC0cp3QbWkjxZFeM'  # Get from Google Cloud Console
+
 GOOGLE_API_KEY = os.getenv('GOOGLE_FACT_CHECK_API_KEY')
 
 def check_with_fact_checking_sites(text):

@@ -880,3 +880,7 @@ body {
     33% { content: '..'; }
     66% { content: '...'; }
 } 
+
+body{
+        background-image: url("https://www.transparenttextures.com/patterns/skulls.png");
+}
