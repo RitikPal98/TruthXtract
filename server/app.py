@@ -23,7 +23,8 @@ CORS(app)
 # NEWS_API = os.getenv('NEWS_API_KEY')
 
 # NEWS_API_KEY ="e5de620f7465479ea1d5dd485c998c2f"
-NEWS_API_KEY ="533e225761e549e39d4894451aa86fd4"
+# NEWS_API_KEY ="533e225761e549e39d4894451aa86fd4"
+NEWS_API_KEY ="132a26bd7e684fc9bbdcb0f4a70ca3fa"
 
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
 
@@ -457,7 +458,7 @@ def fetch_news_from_source(source_type, domains):
             sort_by='publishedAt',
             from_param=(datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d'),
             to=datetime.now().strftime('%Y-%m-%d'),
-            page_size=5
+            page_size=10
         )
         
         articles = []
@@ -651,7 +652,7 @@ def refresh_news_cache():
         )
 
         # Get at least 15 articles
-        processed_news = processed_news[:20]
+        processed_news = processed_news[:50]
         
         # Update cache with the final result
         with NEWS_CACHE['lock']:
