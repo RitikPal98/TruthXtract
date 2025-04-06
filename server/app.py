@@ -482,73 +482,59 @@ def process_article(article_title, article_description, source_name, article_url
         text = f"{article_title} {article_description}"
         
         # Skip full Gemini analysis for very common sources to improve performance
-        common_sources = ['The Times of India', 'Hindustan Times', 'NDTV', 'BBC News', 'Reuters']
-        is_common_source = any(src.lower() in source_name.lower() for src in common_sources)
+        # common_sources = ['The Times of India', 'Hindustan Times', 'NDTV', 'BBC News', 'Reuters']
+        # is_common_source = any(src.lower() in source_name.lower() for src in common_sources)
         
+        # --- Always use the fast, non-Gemini path for gallery articles --- 
         # Fast classification without Gemini for common sources
-        if is_common_source:
+        # if is_common_source:
             # Simple category detection based on keywords
-            category = 'General'
-            tone = 'neutral'
-            
-            for keyword, categories in {
-                'business|economy|market|stock|finance': 'Business',
-                'tech|technology|digital|cyber|AI|software': 'Technology',
-                'politics|government|minister|election|parliament': 'Politics',
-                'sport|cricket|football|tennis|match': 'Sports',
-                'health|covid|virus|disease|medical': 'Health',
-                'entertainment|movie|film|actor|cinema': 'Entertainment'
-            }.items():
-                for k in keyword.split('|'):
-                    if k.lower() in text.lower():
-                        category = categories
-                        break
-            
-            # Simple tone detection
-            if any(word in text.lower() for word in ['breaking', 'exclusive', 'shocking', 'urgent']):
-                tone = 'sensationalist'
-            
-            # For common sources, use a simpler model for faster processing
-            final_score, confidence, analysis = 0.7, 0.6, {
-                'model_score': 0.7,
-                'fact_check_score': 0.7,
-                'verification_score': 0.7,
-                'source_credibility': 0.8
-            }
-            
-            # Calculate priority based on title keywords
-            priority_score = 0
-            for keyword in ['urgent', 'breaking', 'exclusive', 'alert']:
-                if keyword in article_title.lower():
-                    priority_score += 1
-        else:
-            # Only use Gemini for less common sources or more complex analysis
-            try:
-                # Get lightweight classification for better categorization
-                classification = analyze_content_with_gemini(text[:200], "classify")  # Only use first 200 chars
-                category = classification.get('category', 'General')
-                tone = classification.get('tone', 'neutral')
-                
-                # Get analysis with standard model
-                final_score, confidence, analysis = analyze_text(text, source_name, article_url)
-                
-                # Calculate priority based on tone and category
-                priority_score = 0
-                if tone in ['inflammatory', 'sensationalist']:
-                    priority_score += 1
-                
-                # Important topics deserve higher priority
-                important_categories = ['Politics', 'Breaking News', 'Crisis']
-                if category in important_categories:
-                    priority_score += 1
-            except Exception as e:
-                print(f"Error in Gemini analysis, using fallback: {str(e)}")
-                # Fallback values if Gemini fails
-                category = 'General'
-                tone = 'neutral'
-                final_score, confidence = 0.6, 0.5
-                analysis = {}
-                priority_score = 0
+        category = 'General'
+        tone = 'neutral'
+        
+        for keyword, categories in {
+            'business|economy|market|stock|finance': 'Business',
+            'tech|technology|digital|cyber|AI|software': 'Technology',
+            'politics|government|minister|election|parliament': 'Politics',
+            'sport|cricket|football|tennis|match': 'Sports',
+            'health|covid|virus|disease|medical': 'Health',
+            'entertainment|movie|film|actor|cinema': 'Entertainment'
+        }.items():
+            for k in keyword.split('|'):
+                if k.lower() in text.lower():
+                    category = categories
+                    break
+        
+        # Simple tone detection
+        if any(word in text.lower() for word in ['breaking', 'exclusive', 'shocking', 'urgent']):
+            tone = 'sensationalist'
+        
+        # Calculate priority based on title keywords
+        priority_score = 0
+        for keyword in ['urgent', 'breaking', 'exclusive', 'alert']:
+            if keyword in article_title.lower():
+                priority_score += 1
+        
+        # Get analysis with standard model
+        # final_score, confidence, analysis = analyze_text(text, source_name, article_url)
+        
+        # Calculate priority based on tone and category
+        # priority_score = 0
+        # if tone in ['inflammatory', 'sensationalist']:
+        #     priority_score += 1
+        
+        # Important topics deserve higher priority
+        # important_categories = ['Politics', 'Breaking News', 'Crisis']
+        # if category in important_categories:
+        #     priority_score += 1
+        # except Exception as e:
+        #     print(f"Error in Gemini analysis, using fallback: {str(e)}")
+        #     # Fallback values if Gemini fails
+        #     category = 'General'
+        #     tone = 'neutral'
+        #     final_score, confidence = 0.6, 0.5
+        #     analysis = {}
+        #     priority_score = 0
         
         return {
             'title': article_title,

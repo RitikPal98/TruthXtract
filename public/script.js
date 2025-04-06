@@ -754,23 +754,80 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Render enhanced evidence with context matching
   function renderEnhancedEvidence(result) {
-    if (!result || !result.references) {
+    if (!result) {
       return "<p>No evidence found related to this content.</p>";
     }
 
     const references = result.references;
+    const analysis = result.analysis; // Get the analysis object
     const userInput = result.userInput;
 
     // Extract key phrases from user input
     const userKeywords = extractKeywords(userInput);
 
     let html = '<div class="evidence-sections">';
+    let evidenceFound = false; // Flag to track if any evidence was rendered
+
+    // Render Gemini AI Evidence (if available)
+    if (analysis && analysis.gemini_evidence) {
+      evidenceFound = true;
+      html += `
+        <div class="evidence-section">
+          <h4>AI Analysis Insights (Gemini)</h4>
+          <div class="evidence-items">
+            <div class="evidence-item ai-insight">
+              <div class="evidence-body">
+                <p>${analysis.gemini_evidence.replace(/\\n/g, "<br>")}</p> 
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    // Render Gemini Sources (if available)
+    if (
+      analysis &&
+      analysis.gemini_sources &&
+      analysis.gemini_sources.length > 0
+    ) {
+      evidenceFound = true; // Mark evidence found if sources exist
+      html += `
+        <div class="evidence-section">
+          <h4>AI Suggested Sources (Gemini)</h4>
+          <div class="evidence-items">
+            ${analysis.gemini_sources
+              .map(
+                (source) => `
+              <div class="evidence-item ai-source">
+                <div class="evidence-body">
+                   ${
+                     source.url
+                       ? `<a href="${
+                           source.url
+                         }" target="_blank" class="evidence-link">${
+                           source.title || source.url
+                         }</a>`
+                       : `<span>${
+                           source.title || "Source provided without URL"
+                         }</span>`
+                   }
+                </div>
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+        </div>
+      `;
+    }
 
     // Render fact check claims with relevance indicators
     if (
+      references && // Check if references exist
       references.fact_check_claims &&
       references.fact_check_claims.length > 0
     ) {
+      evidenceFound = true;
       html += `
         <div class="evidence-section">
           <h4>Fact Check Results</h4>
@@ -834,7 +891,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Render similar articles with relevance indicators
-    if (references.similar_articles && references.similar_articles.length > 0) {
+    if (
+      references &&
+      references.similar_articles &&
+      references.similar_articles.length > 0
+    ) {
+      // Check if references exist
+      evidenceFound = true;
       html += `
         <div class="evidence-section">
           <h4>Related News Articles</h4>
@@ -898,6 +961,12 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </div>
       `;
+    }
+
+    // Fallback message if no evidence was rendered at all
+    if (!evidenceFound) {
+      html +=
+        "<p>No specific supporting evidence (fact checks, related articles, or AI insights) could be found for this text at this time.</p>";
     }
 
     html += "</div>";
