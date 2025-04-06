@@ -1,6 +1,3 @@
-<div align="center">
-  <img src="public/assets/logo.png" alt="TruthXtract Logo" width="200"/>
-
 # 🔍 TruthXtract
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
@@ -10,8 +7,6 @@
 [![Gemini AI](https://img.shields.io/badge/Gemini%20AI-Powered-purple)](https://gemini.google.com/)
 
 _Combating misinformation with advanced AI verification_ 🛡️
-
-</div>
 
 ---
 
@@ -94,12 +89,6 @@ Visit `http://localhost:3000` to access the application.
 
 ## 🧠 How It Works
 
-### Advanced Verification Architecture
-
-<div align="center">
-  <img src="public/assets/architecture.png" alt="Architecture Diagram" width="700"/>
-</div>
-
 ### Multi-Layer Analysis Pipeline
 
 1. **Input Reception & Preprocessing** 📥
@@ -168,40 +157,3 @@ Visit `http://localhost:3000` to access the application.
 - **Multi-language Support**: Adding capabilities for Indian regional languages
 - **Enhanced UI/UX**: More interactive visualization tools
 - **Mobile Application**: On-the-go verification capabilities
-
-## 🤝 Contributing
-
-We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create your feature branch
-   ```bash
-   git checkout -b feature/AmazingFeature
-   ```
-3. Commit your changes
-   ```bash
-   git commit -m 'Add some AmazingFeature'
-   ```
-4. Push to the branch
-   ```bash
-   git push origin feature/AmazingFeature
-   ```
-5. Open a Pull Request
-
-## 🙏 Acknowledgments
-
-- [Google Gemini AI](https://gemini.google.com/) for advanced language processing
-- [Hugging Face](https://huggingface.co/) for transformer models
-- [NewsAPI](https://newsapi.org/) for real-time news data
-- [Google Fact Check Tools](https://toolbox.google.com/factcheck/explorer) for verification services
-
-## 📞 Contact & Support
-
-- 📧 Email: ritikpal098@gmail.com
-- 🌐 Demo: [https://truthxtract.me](https://truthxtract.me)
-
-<div align="center">
-  <img src="public/assets/footer.png" alt="Footer" width="100%"/>
-  
-  ⭐ Star us on GitHub | 🐛 Report Issues | 💡 Share Feedback
-</div>
