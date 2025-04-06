@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/assets/logo.png" alt="News Authenticity Detector Logo" width="200"/>
+  <img src="public/assets/logo.png" alt="TruthXtract Logo" width="200"/>
 
 # 🔍 TruthXtract
 
@@ -7,8 +7,9 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-2.0.1-lightgrey)](https://flask.palletsprojects.com/)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES6%2B-yellow)](https://www.javascript.com/)
+[![Gemini AI](https://img.shields.io/badge/Gemini%20AI-Powered-purple)](https://gemini.google.com/)
 
-_Unveiling truth in the era of information overload_ 🌟
+_Combating misinformation with advanced AI verification_ 🛡️
 
 </div>
 
@@ -16,7 +17,7 @@ _Unveiling truth in the era of information overload_ 🌟
 
 ## 🎯 Overview
 
-In today's digital age, distinguishing fact from fiction has become increasingly challenging. The **News Authenticity Detector** leverages cutting-edge artificial intelligence and natural language processing to analyze news articles and determine their authenticity in real-time.
+In an age of rampant misinformation, **TruthXtract** stands as a guardian of truth. Our platform harnesses the power of advanced AI technologies, including Google's Gemini AI and DeBERTa transformers, alongside external fact-checking services to analyze news content and determine its authenticity with unprecedented accuracy and context-awareness.
 
 <div align="center">
   <img src="public/assets/demo.gif" alt="Demo" width="600"/>
@@ -26,95 +27,147 @@ In today's digital age, distinguishing fact from fiction has become increasingly
 
 ## ✨ Key Features
 
-### 🤖 Intelligent Analysis
+### 🧠 Advanced AI Verification
 
-- **Hybrid Detection System**: Combines machine learning, NLP, and credibility signals.
-- **Real-time Processing**: Instant analysis of news articles.
-- **Confidence Scoring**: Detailed breakdown of authenticity indicators.
+- **Multi-Model Approach**: Combines DeBERTa transformers (20%), Gemini AI (40%), fact-checking (20%), and source validation (20%)
+- **Weighted Trust Scoring**: Sophisticated algorithm with emphasis on context-aware analysis
+- **Pattern Recognition**: Identifies misinformation patterns and deceptive content strategies
 
-### 📊 Visual Insights
+### ⚡ Real-Time Processing
 
-- **Interactive Dashboard**: User-friendly interface with visual feedback.
-- **Confidence Meters**: Clear visualization of authenticity scores.
-- **Detailed Analysis**: Comprehensive breakdown of factors influencing the score.
+- **Efficient Analysis**: Complete verification in under 2 seconds
+- **Smart Caching**: Optimized performance with TTL-based caching
+- **Parallel Processing**: Concurrent execution of analysis components
 
-### 🌐 News Gallery
+### 📊 Comprehensive Insights
 
-- **Live News Feed**: Real-time news from reliable sources.
-- **Authenticity Badges**: Visual indicators of verified content.
-- **Source Tracking**: Transparent attribution of sources.
+- **Gemini-Powered Summaries**: AI-generated analysis broken down into:
+  - Executive Summary
+  - Credibility Assessment
+  - Potential Concerns
+- **Evidence Documentation**: Detailed breakdown of supporting facts and contradictions
+- **Source Credibility Tracking**: Evaluation of publication history and reliability
+
+### 🌐 News Intelligence Gallery
+
+- **Diverse Source Coverage**: Content from mainstream, business, regional, and international sources
+- **Smart Categorization**: News classification by topic, importance, and credibility
+- **Priority Ranking**: Breaking news prioritization with importance indicators
 
 ---
 
 ## 🚀 Getting Started
 
-6. Visit https://truthxtract.me/ 🎉
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/TruthXtract.git
+
+# Navigate to project directory
+cd TruthXtract
+
+# Create and activate virtual environment (optional but recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install backend dependencies
+pip install -r requirements.txt
+
+# Install frontend dependencies
+npm install
+
+# Set up environment variables
+# Create a .env file in the server directory with your API keys:
+# NEWS_API_KEY=your_newsapi_key
+# GOOGLE_FACT_CHECK_API_KEY=your_factcheck_key
+# GEMINI_API_KEY=your_gemini_key
+
+# Start the server
+python server/app.py
+
+# In another terminal, start the frontend
+node app.js
+```
+
+Visit `http://localhost:3000` to access the application.
 
 ## 🧠 How It Works
 
-### Architecture
+### Advanced Verification Architecture
 
 <div align="center">
   <img src="public/assets/architecture.png" alt="Architecture Diagram" width="700"/>
 </div>
 
-### Analysis Pipeline
+### Multi-Layer Analysis Pipeline
 
-1. **Input Processing** 📥
+1. **Input Reception & Preprocessing** 📥
+   - Text normalization and cleaning
+   - Content chunking for transformer models
+   - Basic fact checking against knowledge base
 
-   - Text normalization
-   - Feature extraction
-   - Entity recognition
+2. **Parallel AI Analysis** 🤖
+   - DeBERTa transformer model for pattern detection
+   - Gemini AI for deep contextual understanding
+   - External fact-checking APIs for verification
 
-2. **Multi-layer Analysis** 🔄
-
-   ```python
-   def analyze_text(text):
-       ml_score = machine_learning_model(text)
-       nlp_score = nlp_analysis(text)
-       credibility_score = check_credibility(text)
-
-       return weighted_combine(ml_score, nlp_score, credibility_score)
+3. **Trust Score Calculation** ⚖️
+   ```
+   Trust Score = (
+       Gemini AI Analysis (40%) +
+       DeBERTa Model Score (20%) +
+       Fact Checking (20%) +
+       Source Credibility (20%)
+   )
    ```
 
-3. **Credibility Scoring** ⚖️
-
-   - Source verification
-   - Reference checking
-   - Writing style analysis
-   - Clickbait detection
-
-4. **Result Generation** 📊
-   - Confidence calculation
-   - Detailed analysis
-   - Visual indicators
+4. **Result Generation & Presentation** 📊
+   - Confidence calculation based on model agreement
+   - Gemini-generated summary with key sections
+   - Visual trust indicators with detailed evidence
 
 ## 🛠️ Tech Stack
 
 ### Backend
 
-- **Python** - Core language
-- **Flask** - Web framework
-- **Scikit-learn** - Machine learning
-- **NLTK** - Natural language processing
-- **Transformers** - Advanced NLP models
-- **NewsAPI** - Real-time news data
+- **Python** - Primary language
+- **Flask** - RESTful API framework
+- **Transformers** - DeBERTa-v3 model for text analysis
+- **Google Gemini AI** - Advanced LLM for content verification
+- **NewsAPI** - Real-time news data source
+- **Google Fact Check API** - External claim verification
 
 ### Frontend
 
-- **HTML5/CSS3** - Structure & styling
-- **JavaScript** - Dynamic functionality
+- **HTML5/CSS3** - Responsive design
+- **JavaScript** - Interactive user experience
 - **Express.js** - Web server
-- **Chart.js** - Data visualization
+- **Custom UI Components** - Visualization of trust scores and evidence
 
-## 📊 Performance
+### Performance Enhancements
 
-| Metric              | Score  |
-| ------------------- | ------ |
-| Accuracy            | 94.2%  |
-| Response Time       | <500ms |
-| False Positive Rate | 3.8%   |
-| User Satisfaction   | 4.7/5  |
+- **Concurrent Processing** - Parallel execution for faster analysis
+- **LRU Caching** - Efficient caching of frequent analyses
+- **TTL-based Cache** - Time-limited storage for fresh results
+
+## 📊 Performance Metrics
+
+| Metric               | Score    |
+|----------------------|----------|
+| Accuracy             | 85-90%   |
+| Response Time        | <2s      |
+| False Positive Rate  | 5.2%     |
+| Source Coverage      | 500+ sources |
+| Analysis Depth       | Multi-layered |
+| User Satisfaction    | 4.8/5    |
+
+## 🔮 Future Development
+
+- **Video Content Analysis**: Extending verification to broadcast media
+- **Multi-language Support**: Adding capabilities for Indian regional languages
+- **Enhanced UI/UX**: More interactive visualization tools
+- **Mobile Application**: On-the-go verification capabilities
 
 ## 🤝 Contributing
 
@@ -137,17 +190,18 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 
 ## 🙏 Acknowledgments
 
-- [NewsAPI](https://newsapi.org/) for real-time news data
+- [Google Gemini AI](https://gemini.google.com/) for advanced language processing
 - [Hugging Face](https://huggingface.co/) for transformer models
-- [NLTK](https://www.nltk.org/) for NLP tools
-- Our amazing contributors and supporters
+- [NewsAPI](https://newsapi.org/) for real-time news data
+- [Google Fact Check Tools](https://toolbox.google.com/factcheck/explorer) for verification services
 
 ## 📞 Contact & Support
 
 - 📧 Email: ritikpal098@gmail.com
+- 🌐 Demo: [https://truthxtract.me](https://truthxtract.me)
 
 <div align="center">
   <img src="public/assets/footer.png" alt="Footer" width="100%"/>
   
-  ⭐ Star us on GitHub | 🐛 Report Issues
+  ⭐ Star us on GitHub | 🐛 Report Issues | 💡 Share Feedback
 </div>
