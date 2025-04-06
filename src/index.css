@@ -1,0 +1,110 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 50% 10%;
+    --foreground: 210 20% 98%;
+
+    --card: 210 40% 15%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 210 40% 15%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 210 100% 50%;
+    --primary-foreground: 210 20% 98%;
+
+    --secondary: 210 40% 30%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 210 40% 20%;
+    --muted-foreground: 210 20% 70%;
+
+    --accent: 210 100% 40%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+
+    --border: 210 40% 20%;
+    --input: 210 40% 20%;
+    --ring: 210 100% 50%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 210 50% 10%;
+    --sidebar-foreground: 210 20% 98%;
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 210 40% 15%;
+    --sidebar-accent-foreground: 210 20% 98%;
+    --sidebar-border: 210 40% 20%;
+    --sidebar-ring: 210 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-truth-dark text-foreground overflow-x-hidden;
+    font-family: 'Inter', sans-serif;
+  }
+
+  canvas {
+    touch-action: none;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(10, 61, 98, 0.2);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(52, 152, 219, 0.7);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(52, 152, 219, 1);
+  }
+}
+
+@layer components {
+  .glow-text {
+    text-shadow: 0 0 5px rgba(52, 152, 219, 0.7), 0 0 10px rgba(52, 152, 219, 0.5);
+  }
+
+  .glow-border {
+    box-shadow: 0 0 5px rgba(52, 152, 219, 0.7), 0 0 15px rgba(52, 152, 219, 0.5);
+  }
+
+  .truth-button {
+    @apply bg-truth-light hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-md transition-all duration-300;
+    box-shadow: 0 0 10px rgba(52, 152, 219, 0.5);
+  }
+
+  .truth-button:hover {
+    box-shadow: 0 0 15px rgba(52, 152, 219, 0.8), 0 0 30px rgba(52, 152, 219, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .glass-panel {
+    @apply bg-opacity-10 bg-white backdrop-blur-md border border-opacity-20 border-white rounded-xl;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
