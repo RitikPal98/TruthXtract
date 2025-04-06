@@ -244,7 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         result.analysis.gemini_score
                           ? `
                       <li class="breakdown-item">
-                        <span class="breakdown-label">Gemini AI Analysis</span>
+                        <span class="breakdown-label">AI Analysis</span>
                         <div class="breakdown-bar">
                           <div class="breakdown-fill" style="width: ${(
                             result.analysis.gemini_score * 100
@@ -258,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
                           : ""
                       }
                       <li class="breakdown-item">
-                        <span class="breakdown-label">AI Content Analysis</span>
+                        <span class="breakdown-label">Model Content Analysis</span>
                         <div class="breakdown-bar">
                           <div class="breakdown-fill" style="width: ${(
                             result.analysis.model_score * 100
@@ -773,7 +773,7 @@ document.addEventListener("DOMContentLoaded", () => {
       evidenceFound = true;
       html += `
         <div class="evidence-section">
-          <h4>AI Analysis Insights (Gemini)</h4>
+          <h4>AI Analysis Insights</h4>
           <div class="evidence-items">
             <div class="evidence-item ai-insight">
               <div class="evidence-body">
@@ -793,7 +793,7 @@ document.addEventListener("DOMContentLoaded", () => {
       evidenceFound = true; // Mark evidence found if sources exist
       html += `
         <div class="evidence-section">
-          <h4>AI Suggested Sources (Gemini)</h4>
+          <h4>AI Suggested Sources</h4>
           <div class="evidence-items">
             ${analysis.gemini_sources
               .map(
@@ -1202,7 +1202,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Check which components have high scores
     const highComponents = [];
     if (result.analysis.model_score > highScoreThreshold)
-      highComponents.push("AI content analysis");
+      highComponents.push("Model content analysis");
     if (result.analysis.fact_check_score > highScoreThreshold)
       highComponents.push("fact verification");
     if (result.analysis.verification_score > highScoreThreshold)

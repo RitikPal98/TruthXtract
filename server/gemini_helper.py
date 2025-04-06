@@ -35,6 +35,7 @@ def analyze_content_with_gemini(text, prompt_type="verify"):
         if prompt_type == "verify":
             # Use the more accurate experimental model for verification tasks
             model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25')
+            # model = genai.GenerativeModel('gemini-1.5-pro')
         else:
             # Use standard model for other tasks
             model = genai.GenerativeModel('gemini-1.5-pro')
