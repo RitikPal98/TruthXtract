@@ -31,7 +31,12 @@ function App() {
       }
       setSelectedFile(file);
       setUrl(''); // Clear URL input
-      setPreviewUrl(URL.createObjectURL(file));
+      // Only set preview URL for video files
+      if (file.type.startsWith('video/')) {
+        setPreviewUrl(URL.createObjectURL(file));
+      } else {
+        setPreviewUrl(null);
+      }
       setAnalysisResult(null);
       setError(null);
     }
@@ -280,9 +285,9 @@ function App() {
           </div>
           
           <div className="flex">
-            <input
-              type="text"
-              value={url}
+          <input
+            type="text"
+            value={url}
               onChange={(e) => {
                 setUrl(e.target.value);
                 if (selectedFile) {
@@ -376,10 +381,17 @@ function App() {
                   <img src={previewUrl} alt="Preview" className="max-w-full h-auto" />
                 ) : (
                   <video controls width="100%" src={previewUrl} className="max-w-full">
-                    Your browser does not support the video tag.
-                  </video>
+                Your browser does not support the video tag.
+              </video>
                 )}
               </div>
+            </div>
+          )}
+          {selectedFile && !previewUrl && (
+            <div className="mt-8">
+              <p className={`text-2xl mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                Selected: <span className="font-medium">{selectedFile.name}</span>
+              </p>
             </div>
           )}
           
@@ -419,354 +431,433 @@ function App() {
         {/* Analysis Results Section */} 
         {analysisResult && (
           <div className="mt-8">
-            <h2 className="text-3xl font-semibold text-gray-700 mb-4">Analysis Results</h2>
+            <h2 className="text-3xl font-semibold text-gray-700 mb-4">Analysis Results ({analysisResult.media_type?.toUpperCase()})</h2>
 
-            {/* Metadata Section */} 
-            <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <h3 className="text-2xl font-medium text-gray-800 mb-3">Media Metadata</h3>
-              {analysisResult.metadata && typeof analysisResult.metadata === 'object' && Object.keys(analysisResult.metadata).length > 0 ? (
-                <pre className="text-lg bg-white p-3 rounded border border-gray-300 overflow-x-auto">
-                  {JSON.stringify(analysisResult.metadata, null, 2)}
-                </pre>
-              ) : (
-                <p className="text-lg text-gray-500">No metadata extracted or metadata is empty.</p>
-              )}
-               {analysisResult.metadata?.Error && (
-                 <p className="text-lg text-red-600 mt-2">Metadata extraction failed: {analysisResult.metadata.Error}</p>
-               )}
-            </div>
-
-            {/* Keyframes Section */} 
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-10">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-2xl font-medium text-gray-800">Extracted Keyframes</h3>
-                
-                {analysisResult.keyframes && analysisResult.keyframes.length > 0 && (
-                  <button 
-                    onClick={() => setShowKeyframeModal(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center transition-all duration-300 shadow-md hover:shadow-lg text-xl font-medium"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z" />
-                    </svg>
-                    Google Reverse Image Search
-                  </button>
-                )}
-              </div>
-              
-              {analysisResult.keyframes && analysisResult.keyframes.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {analysisResult.keyframes.map((keyframePath, index) => {
-                    // Check if the keyframePath is a full URL (Cloudinary) or a relative path
-                    const isCloudinaryUrl = keyframePath.startsWith('http');
-                    const imageUrl = isCloudinaryUrl ? keyframePath : `${BACKEND_URL}/${keyframePath.replace(/\\/g, '/')}`;
-                    
-                    // For display name, extract filename or use frame number
-                    let displayName;
-                    if (isCloudinaryUrl) {
-                      // Extract filename from Cloudinary URL
-                      const urlParts = keyframePath.split('/');
-                      displayName = urlParts[urlParts.length - 1].split('.')[0]; // Get filename without extension
-                    } else {
-                      displayName = keyframePath.split('/').pop().split('\\').pop();
-                    }
-                    
-                    return (
-                      <div key={index} className="border rounded-lg overflow-hidden shadow-sm bg-white p-2 text-center">
-                        <img 
-                            src={imageUrl} 
-                            alt={`Keyframe ${index + 1}`} 
-                            className="w-full h-auto object-cover mb-2 cursor-pointer hover:opacity-80 transition-opacity" 
-                            onClick={() => window.open(imageUrl, '_blank')} // Open image in new tab
-                        />
-                        <p className="text-lg text-gray-600 truncate">{displayName}</p>
-                         {/* Individual Image Search Links */} 
-                         <div className="mt-2 space-x-1">
-                             <a href={getReverseImageSearchUrl(imageUrl, 'tineye')} target="_blank" rel="noopener noreferrer" className="text-lg text-blue-500 hover:underline">TinEye</a>
-                             <a href={getReverseImageSearchUrl(imageUrl, 'yandex')} target="_blank" rel="noopener noreferrer" className="text-lg text-blue-500 hover:underline">Yandex</a>
-                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-lg text-gray-500">No keyframes extracted or keyframe extraction failed.</p>
-              )}
-              {/* Display error from keyframe extraction if metadata is also missing (likely ffmpeg issue) */}
-              {(!analysisResult.keyframes || analysisResult.keyframes.length === 0) && analysisResult.metadata?.Error?.includes('ffmpeg') && (
-                   <p className="text-lg text-red-600 mt-2">Keyframe extraction failed: Could not run ffmpeg.</p>
-              )}
-            </div>
-
-            {/* Keyframe Selection Modal */}
-            {showKeyframeModal && analysisResult.keyframes && analysisResult.keyframes.length > 0 && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowKeyframeModal(false)}>
-                <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Select Keyframe for Google Search</h3>
-                    <button 
-                      onClick={() => setShowKeyframeModal(false)}
-                      className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+            {/* Display Uploaded Image Section (Image Only) */}
+            {analysisResult.media_type === 'image' && analysisResult.image_url && (
+              <div className={`mb-6`}> 
+                  <h3 className={`text-2xl font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Uploaded Image</h3>
+                  <div className="flex justify-center mb-3"> 
+                <img 
+                  src={analysisResult.image_url}
+                  alt="Uploaded content" 
+                        className="max-w-2xl mx-auto h-auto object-contain rounded"
+                     />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
+                  <div className="text-center space-x-3 mt-2">
+                    <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Reverse Search:</span>
+                    <a href={getReverseImageSearchUrl(analysisResult.image_url, 'google')} target="_blank" rel="noopener noreferrer" className={`text-sm hover:underline ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>Google Lens</a>
+                    <a href={getReverseImageSearchUrl(analysisResult.image_url, 'tineye')} target="_blank" rel="noopener noreferrer" className={`text-sm hover:underline ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>TinEye</a>
+                    <a href={getReverseImageSearchUrl(analysisResult.image_url, 'yandex')} target="_blank" rel="noopener noreferrer" className={`text-sm hover:underline ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>Yandex</a>
+                </div>
+              </div>
+            )}
+
+            {/* --- START: Unified Sections --- */}
+
+            {/* Metadata Section (Show for Both) */}
+            {analysisResult.metadata && (
+              <div className={`mb-6 p-4 rounded-lg border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                <h3 className={`text-2xl font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Media Metadata</h3>
+                {analysisResult.metadata && typeof analysisResult.metadata === 'object' && Object.keys(analysisResult.metadata).length > 0 && !analysisResult.metadata.Error ? (
+                  <pre className="text-lg bg-white p-3 rounded border border-gray-300 overflow-x-auto">
+                     {JSON.stringify(analysisResult.metadata, null, 2)}
+                   </pre>
+                 ) : (
+                  <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {analysisResult.metadata?.Error 
+                          ? `Metadata extraction failed: ${analysisResult.metadata.Error}` 
+                          : 'No metadata extracted or metadata is empty.'}
+                  </p>
+                  )}
+               </div>
+            )}
+
+            {/* Extracted Text Section (Conditional Title and Content) */}
+            {(analysisResult.media_type === 'image' && analysisResult.ocr_text) || (analysisResult.media_type === 'video' && analysisResult.transcription) ? (
+              <div className={`mb-10 p-4 rounded-lg border ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                <h3 className={`text-2xl font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                  {analysisResult.media_type === 'image' ? 'Extracted Text (OCR)' : 'Transcription (Google STT)'}
+                </h3>
+                {analysisResult.media_type === 'image' ? (
+                   typeof analysisResult.ocr_text === 'string' && analysisResult.ocr_text.length > 0 && !analysisResult.ocr_text.startsWith('Error:') ? (
+                     <p className={`text-xl whitespace-pre-wrap ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{analysisResult.ocr_text}</p>
+                   ) : (
+                     <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{analysisResult.ocr_text || "No text extracted or extraction failed."}</p>
+                   )
+                 ) : (
+                    analysisResult.transcription ? (
+                        analysisResult.transcription.transcript ? (
+                           <p className={`text-xl whitespace-pre-wrap ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>{analysisResult.transcription.transcript}</p>
+                         ) : (
+                           <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{analysisResult.transcription.error || 'No transcript generated.'}</p>
+                         )
+                     ) : (
+                       <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Transcription not available.</p>
+                     )
+                 )}
+              </div>
+            ) : null}
+
+            {/* Keyframes Section (Video Only) */}
+            {analysisResult.media_type === 'video' && (
+                <div className={`bg-gray-50 p-4 rounded-lg border border-gray-200 mb-10 ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className={`text-2xl font-medium text-gray-800 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Extracted Keyframes</h3>
+                    {analysisResult.keyframes && analysisResult.keyframes.length > 0 && (
+                      <button 
+                        onClick={() => setShowKeyframeModal(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center transition-all duration-300 shadow-md hover:shadow-lg text-xl font-medium"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z" />
+                        </svg>
+                        Google Reverse Image Search
+                      </button>
+                    )}
+                  </div>
+                  
+                {analysisResult.keyframes && analysisResult.keyframes.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {analysisResult.keyframes.map((keyframePath, index) => {
-                      // Check if the keyframePath is a full URL (Cloudinary) or a relative path
                       const isCloudinaryUrl = keyframePath.startsWith('http');
                       const imageUrl = isCloudinaryUrl ? keyframePath : `${BACKEND_URL}/${keyframePath.replace(/\\/g, '/')}`;
+                      let displayName;
+                      if (isCloudinaryUrl) {
+                        const urlParts = keyframePath.split('/');
+                          displayName = urlParts[urlParts.length - 1].split('.')[0];
+                      } else {
+                        displayName = keyframePath.split('/').pop().split('\\').pop();
+                      }
                       
                       return (
-                        <div 
-                          key={index} 
-                          className="border rounded-lg overflow-hidden shadow hover:shadow-md transition-all cursor-pointer transform hover:scale-105"
-                          onClick={() => handleKeyframeSearch(imageUrl)}
-                        >
-                          <img src={imageUrl} alt={`Keyframe ${index + 1}`} className="w-full h-auto" />
-                          <div className="p-2 bg-blue-50 text-center">
-                            <p className="text-blue-600 font-medium">Search frame {index + 1}</p>
-                          </div>
+                          <div key={index} className={`border rounded-lg overflow-hidden shadow-sm p-2 text-center ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`}>
+                          <img 
+                              src={imageUrl} 
+                              alt={`Keyframe ${index + 1}`} 
+                              className="w-full h-auto object-cover mb-2 cursor-pointer hover:opacity-80 transition-opacity" 
+                                onClick={() => window.open(imageUrl, '_blank')} 
+                          />
+                            <p className={`text-lg truncate ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{displayName}</p>
+                           <div className="mt-2 space-x-1">
+                                 <a href={getReverseImageSearchUrl(imageUrl, 'tineye')} target="_blank" rel="noopener noreferrer" className={`text-lg hover:underline ${darkMode ? 'text-blue-400' : 'text-blue-500'}`}>TinEye</a>
+                                 <a href={getReverseImageSearchUrl(imageUrl, 'yandex')} target="_blank" rel="noopener noreferrer" className={`text-lg hover:underline ${darkMode ? 'text-blue-400' : 'text-blue-500'}`}>Yandex</a>
+                           </div>
                         </div>
                       );
-                    })}
+                      })}
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Transcription Section */}
-            <div className="mb-10 bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <h3 className="text-2xl font-medium text-gray-800 mb-3">Transcription (Google STT)</h3>
-              {analysisResult.transcription ? (
-                <> 
-                  {analysisResult.transcription.transcript ? (
-                    <p className="text-xl text-gray-800 whitespace-pre-wrap">{analysisResult.transcription.transcript}</p>
-                  ) : (
-                    <p className="text-xl text-gray-500 italic">{analysisResult.transcription.error || 'No transcript generated.'}</p>
-                  )}
-                </>
-              ) : (
-                <p className="text-xl text-gray-500 italic">Transcription not available.</p>
-              )}
-            </div>
-
-            {/* Fact Checking Analysis Section */}
-            {analysisResult.transcript_analysis && (
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-10">
-                <h3 className="text-2xl font-medium text-gray-800 mb-3">Fact-Checking Analysis</h3>
-                
-                {/* Verification Score */}
-                <div className="mb-4">
-                  <h4 className="text-xl font-medium text-gray-700">Verification Score</h4>
-                  <div className="mt-2 w-full bg-gray-200 rounded-full h-4">
-                    <div 
-                      className={`h-4 rounded-full ${getScoreColorClass(analysisResult.transcript_analysis.verification_score)}`}
-                      style={{ width: `${analysisResult.transcript_analysis.verification_score * 100}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between mt-1 text-xl">
-                    <span className="text-red-500">False</span>
-                    <span className="text-yellow-500">Uncertain</span>
-                    <span className="text-green-500">True</span>
-                  </div>
-                  <p className="text-xl mt-2">
-                    <strong>Score:</strong> {(analysisResult.transcript_analysis.verification_score * 100).toFixed(1)}%
-                    <span className="ml-2 text-gray-500">
-                      <strong>Confidence:</strong> {(analysisResult.transcript_analysis.confidence * 100).toFixed(1)}%
-                    </span>
-                  </p>
-                </div>
-
-                {/* Analysis Details */}
-                {analysisResult.transcript_analysis.analysis && (
-                  <div className="mt-4">
-                    <h4 className="text-xl font-medium text-gray-700">Analysis Details</h4>
-                    
-                    {analysisResult.transcript_analysis.analysis.is_basic_fact && (
-                      <div className="p-3 bg-blue-50 rounded-lg mt-2">
-                        <p className="text-blue-700">
-                          <span className="font-bold">✓ Basic Fact Detected</span> - This statement contains a well-known fact.
-                        </p>
-                      </div>
-                    )}
-
-                    {analysisResult.transcript_analysis.analysis.error && (
-                      <div className="p-3 bg-red-50 rounded-lg mt-2">
-                        <p className="text-red-700">
-                          <span className="font-bold">⚠ Analysis Error:</span> {analysisResult.transcript_analysis.analysis.error}
-                        </p>
-                      </div>
-                    )}
-
-                    {!analysisResult.transcript_analysis.analysis.is_basic_fact && !analysisResult.transcript_analysis.analysis.error && (
-                      <div className="mt-2">
-                        <div className="flex items-center mb-3">
-                          <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-green-100">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                          <h4 className="ml-2 text-xl font-medium">Verification Methods Used</h4>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div className="p-3 bg-green-50 border border-green-100 rounded-lg">
-                            <div className="flex items-center mb-1">
-                              <p className="text-xl font-semibold">Model Analysis</p>
-                              <span className="ml-auto text-xl bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Primary</span>
-                            </div>
-                            
-                            {analysisResult.transcript_analysis.analysis.gemini_claims && 
-                             analysisResult.transcript_analysis.analysis.gemini_claims.length > 0 && 
-                             analysisResult.transcript_analysis.analysis.gemini_claims[0].verdict ? (
-                              <div>
-                                <p className={`text-xl font-bold ${analysisResult.transcript_analysis.analysis.gemini_claims[0].verdict === "REAL" ? "text-green-600" : "text-red-600"}`}>
-                                  {analysisResult.transcript_analysis.analysis.gemini_claims[0].verdict}
-                                </p>
-                                <div className="flex items-center mt-1">
-                                  <span className="text-xl mr-2">Truth Score:</span>
-                                  <span className={`text-xl font-medium ${getScoreTextColorClass(analysisResult.transcript_analysis.analysis.gemini_score)}`}>
-                                    {(analysisResult.transcript_analysis.analysis.gemini_score * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                              </div>
-                            ) : (
-                              <p className={`text-xl font-bold ${getScoreTextColorClass(analysisResult.transcript_analysis.analysis.gemini_score)}`}>
-                                {(analysisResult.transcript_analysis.analysis.gemini_score * 100).toFixed(0)}%
-                              </p>
-                            )}
-                            
-                            <p className="text-xl text-gray-500 mt-1">Advanced AI-based fact verification with source attribution</p>
-                          </div>
-                          
-                          <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                            <div className="flex items-center mb-1">
-                              <p className="text-xl font-semibold">Google Fact Check</p>
-                              <span className="ml-auto text-xl bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Secondary</span>
-                            </div>
-                            <p className={`text-xl font-bold ${getScoreTextColorClass(analysisResult.transcript_analysis.analysis.google_fact_check_score)}`}>
-                              {(analysisResult.transcript_analysis.analysis.google_fact_check_score * 100).toFixed(0)}%
-                            </p>
-                            <p className="text-xl text-gray-500 mt-1">Cross-referenced with fact-checking databases</p>
-                          </div>
-                          
-                          <div className="p-3 bg-purple-50 border border-purple-100 rounded-lg">
-                            <div className="flex items-center mb-1">
-                              <p className="text-xl font-semibold">News Source Verification</p>
-                              <span className="ml-auto text-xl bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">Tertiary</span>
-                            </div>
-                            <p className={`text-xl font-bold ${getScoreTextColorClass(analysisResult.transcript_analysis.analysis.external_verification_score)}`}>
-                              {(analysisResult.transcript_analysis.analysis.external_verification_score * 100).toFixed(0)}%
-                            </p>
-                            <p className="text-xl text-gray-500 mt-1">Cross-checked with reliable news sources</p>
-                          </div>
-                        </div>
-                        
-                        {/* Source credibility card */}
-                        {analysisResult.transcript_analysis.analysis.source_credibility !== 0.5 && (
-                          <div className="p-3 bg-gray-100 rounded-lg mb-2">
-                            <div className="flex items-center">
-                              <p className="text-lg font-semibold">Source Credibility</p>
-                              <span className="ml-auto text-lg bg-gray-200 text-gray-800 px-2 py-0.5 rounded-full">Metadata</span>
-                            </div>
-                            <p className={`text-lg font-bold ${getScoreTextColorClass(analysisResult.transcript_analysis.analysis.source_credibility)}`}>
-                              {(analysisResult.transcript_analysis.analysis.source_credibility * 100).toFixed(0)}%
-                            </p>
-                            <p className="text-lg text-gray-500 mt-1">Based on media metadata source information</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Claims Found */}
-                    {analysisResult.transcript_analysis.analysis.claims && analysisResult.transcript_analysis.analysis.claims.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="text-lg font-medium text-gray-700 mb-2">Claims Analysis ({analysisResult.transcript_analysis.analysis.claims_found})</h4>
-                        <div className="border rounded-lg bg-white">
-                          {analysisResult.transcript_analysis.analysis.claims.map((claim, index) => (
-                            <div key={index} className="p-4 border-b last:border-b-0">
-                              {/* Google Fact Check API claim format */}
-                              {claim.source_type === 'google_fact_check' && (
-                                <>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="font-semibold text-lg">{claim.text}</p>
-                                    <span className="text-lg bg-blue-100 text-blue-800 px-2 py-1 rounded">Google Fact Check</span>
-                                  </div>
-                                  <div className="flex items-center mt-1">
-                                    {claim.claimReview && claim.claimReview[0] && (
-                                      <>
-                                        <span className="text-lg bg-gray-200 px-2 py-1 rounded mr-2">
-                                          {claim.claimReview[0].publisher?.name || 'Unknown Publisher'}
-                                        </span>
-                                        <span className="text-lg text-blue-600">
-                                          <a href={claim.claimReview[0].url} target="_blank" rel="noopener noreferrer">
-                                            View Source
-                                          </a>
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-                              
-                              {/* Gemini AI claim format */}
-                              {claim.source_type === 'gemini' && (
-                                <>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="font-semibold text-lg">{claim.text}</p>
-                                    <span className="text-lg bg-green-100 text-green-800 px-2 py-1 rounded">
-                                      Gemini AI • {(claim.truthfulness * 100).toFixed(0)}% True
-                                    </span>
-                                  </div>
-                                  
-                                  {/* Truth score bar */}
-                                  <div className="mt-2 w-full bg-gray-200 rounded-full h-2 mb-3">
-                                    <div 
-                                      className={`h-2 rounded-full ${getScoreColorClass(claim.truthfulness)}`}
-                                      style={{ width: `${claim.truthfulness * 100}%` }}
-                                    ></div>
-                                  </div>
-                                  
-                                  {/* Evidence section */}
-                                  {claim.evidence && (
-                                    <div className="mt-2 mb-3 text-lg text-gray-700 bg-gray-50 p-2 rounded">
-                                      <p><span className="font-semibold">Analysis:</span> {claim.evidence}</p>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Sources section */}
-                                  {claim.sources && claim.sources.length > 0 && (
-                                    <div className="mt-2">
-                                      <p className="text-lg font-semibold text-gray-500 mb-1">SOURCES:</p>
-                                      <div className="flex flex-wrap gap-2">
-                                        {claim.sources.map((source, i) => (
-                                          <a 
-                                            key={i}
-                                            href={source.url} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-lg bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-2 py-1 rounded-full transition-colors"
-                                          >
-                                            {source.name}
-                                          </a>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                ) : (
+                    <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>No keyframes extracted or keyframe extraction failed.</p>
+                )}
+                {(!analysisResult.keyframes || analysisResult.keyframes.length === 0) && analysisResult.metadata?.Error?.includes('ffmpeg') && (
+                       <p className="text-lg text-red-600 mt-2">Keyframe extraction failed: Could not run ffmpeg.</p>
                 )}
               </div>
             )}
+
+            {/* Keyframe Selection Modal (Video Only) */}
+            {analysisResult.media_type === 'video' && showKeyframeModal && analysisResult.keyframes && analysisResult.keyframes.length > 0 && (
+               <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowKeyframeModal(false)}>
+                 <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                   <div className="flex justify-between items-center mb-4">
+                     <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Select Keyframe for Google Search</h3>
+                     <button 
+                       onClick={() => setShowKeyframeModal(false)}
+                       className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                     >
+                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                       </svg>
+                     </button>
+              </div>
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
+                     {analysisResult.keyframes.map((keyframePath, index) => {
+                       const isCloudinaryUrl = keyframePath.startsWith('http');
+                       const imageUrl = isCloudinaryUrl ? keyframePath : `${BACKEND_URL}/${keyframePath.replace(/\\/g, '/')}`;
+                       
+                       return (
+                         <div 
+                           key={index} 
+                           className="border rounded-lg overflow-hidden shadow hover:shadow-md transition-all cursor-pointer transform hover:scale-105"
+                           onClick={() => handleKeyframeSearch(imageUrl)}
+                         >
+                           <img src={imageUrl} alt={`Keyframe ${index + 1}`} className="w-full h-auto" />
+                           <div className="p-2 bg-blue-50 text-center">
+                             <p className="text-blue-600 font-medium">Search frame {index + 1}</p>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+              </div>
+            )}
+
+            {/* Unified Fact Checking Analysis Section */}
+            {(analysisResult.ocr_analysis || analysisResult.transcript_analysis) && (
+              <div className={`p-4 rounded-lg border mb-10 ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                <h3 className={`text-2xl font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Fact-Checking Analysis</h3>
+                
+                {(() => {
+                   // Determine the correct analysis object based on media type
+                  const analysisData = analysisResult.media_type === 'image' 
+                                        ? analysisResult.ocr_analysis 
+                                        : analysisResult.transcript_analysis;
+                   
+                   // Exit early if no relevant analysis data
+                   if (!analysisData) return <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Fact-checking data not available.</p>;
+                   
+                   const verificationScore = analysisData.verification_score;
+                   const confidence = analysisData.confidence;
+                   const analysisDetails = analysisData.analysis; // Nested details object
+
+                  return (
+                    <>
+                        {/* Verification Score */}
+                        <div className="mb-4">
+                          <h4 className={`text-xl font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Verification Score</h4>
+                          {typeof verificationScore === 'number' ? (
+                              <>
+                                <div className={`mt-2 w-full rounded-full h-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                                  <div 
+                                    className={`h-4 rounded-full ${getScoreColorClass(verificationScore)}`}
+                                    style={{ width: `${(verificationScore ?? 0.5) * 100}%` }}
+                            ></div>
+                          </div>
+                                <div className="flex justify-between mt-1 text-xl">
+                                  <span className="text-red-500">False</span>
+                                  <span className="text-yellow-500">Uncertain</span>
+                                  <span className="text-green-500">True</span>
+                        </div>
+                                <p className={`text-xl mt-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                                  <strong>Score:</strong> {`${(verificationScore * 100).toFixed(1)}%`}
+                                  {typeof confidence === 'number' && (
+                                    <span className={`ml-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                      <strong>Confidence:</strong> {(confidence * 100).toFixed(1)}%
+                            </span>
+                                  )}
+                                </p>
+                              </>
+                          ) : (
+                             <p className={`text-lg italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Score not available</p>
+                          )}
+                        </div>
+
+                        {/* Analysis Details */}
+                        {analysisDetails && (
+                          <div className="mt-4">
+                            <h4 className={`text-xl font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Analysis Details</h4>
+                            
+                            {analysisDetails.is_basic_fact && (
+                              <div className="p-3 bg-blue-100 text-blue-800 rounded-lg mt-2">
+                                <p>
+                                  <span className="font-bold">✓ Basic Fact Detected</span> - This statement contains a well-known fact.
+                                </p>
+                              </div>
+                            )}
+
+                            {analysisDetails.error && (
+                              <div className="p-3 bg-red-100 text-red-800 rounded-lg mt-2">
+                                <p>
+                                  <span className="font-bold">⚠ Analysis Error:</span> {analysisDetails.error}
+                                </p>
+              </div>
+            )}
+            
+                            {!analysisDetails.is_basic_fact && !analysisDetails.error && (
+                              <div className="mt-2">
+                                <div className="flex items-center mb-3">
+                                  <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-green-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                  <h4 className={`ml-2 text-xl font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Verification Methods Used</h4>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                  {/* Model Analysis Card - Always show structure if analysisDetails exists */}
+                                  <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-green-50 border-green-100'}`}>
+                                    <div className="flex items-center mb-1">
+                                      <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Model Analysis</p>
+                                      <span className="ml-auto text-xl bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Primary</span>
+                                    </div>
+                                    {typeof analysisDetails.gemini_score === 'number' ? (
+                                       analysisDetails.gemini_claims?.[0]?.verdict ? (
+                                         <div>
+                                           <p className={`text-xl font-bold ${analysisDetails.gemini_claims[0].verdict === "REAL" ? "text-green-600" : "text-red-600"}`}>
+                                             {analysisDetails.gemini_claims[0].verdict}
+                                           </p>
+                                           <div className="flex items-center mt-1">
+                                             <span className={`text-xl mr-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Truth Score:</span>
+                                             <span className={`text-xl font-medium ${getScoreTextColorClass(analysisDetails.gemini_score)}`}>
+                                               {(analysisDetails.gemini_score * 100).toFixed(0)}%
+                                             </span>
+                                           </div>
+                                         </div>
+                                       ) : (
+                                         <p className={`text-xl font-bold ${getScoreTextColorClass(analysisDetails.gemini_score)}`}>
+                                           {(analysisDetails.gemini_score * 100).toFixed(0)}%
+                                         </p>
+                                       )
+                                    ) : (
+                                        <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>N/A</p>
+                                    )}
+                                    <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>AI-based fact verification</p>
+                                  </div>
+                                  
+                                  {/* Google Fact Check Card - Always show structure if analysisDetails exists */}
+                                  <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
+                                    <div className="flex items-center mb-1">
+                                      <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Google Fact Check</p>
+                                      <span className="ml-auto text-xl bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Secondary</span>
+                                    </div>
+                                    {typeof analysisDetails.google_fact_check_score === 'number' ? (
+                                        <p className={`text-xl font-bold ${getScoreTextColorClass(analysisDetails.google_fact_check_score)}`}>
+                                            {(analysisDetails.google_fact_check_score * 100).toFixed(0)}%
+                                        </p>
+                                    ): (
+                                        <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>N/A</p>
+                                    )}
+                                    <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Database cross-reference</p>
+                                  </div>
+                                  
+                                  {/* News Source Verification Card - Always show structure if analysisDetails exists */}
+                                  <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-purple-50 border-purple-100'}`}>
+                                    <div className="flex items-center mb-1">
+                                      <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>News Source Verification</p>
+                                      <span className="ml-auto text-xl bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">Tertiary</span>
+                                    </div>
+                                    {typeof analysisDetails.external_verification_score === 'number' ? (
+                                        <p className={`text-xl font-bold ${getScoreTextColorClass(analysisDetails.external_verification_score)}`}>
+                                            {(analysisDetails.external_verification_score * 100).toFixed(0)}%
+                                        </p>
+                                    ) : (
+                                        <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>N/A</p>
+                                    )}
+                                    <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Reliable source comparison</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Source credibility card */}
+                                {typeof analysisDetails.source_credibility === 'number' && analysisDetails.source_credibility !== 0.5 && (
+                                  <div className={`p-3 rounded-lg mb-2 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-gray-100 border border-gray-200'}`}>
+                                    <div className="flex items-center">
+                                      <p className={`text-lg font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Source Credibility</p>
+                                      <span className={`ml-auto text-lg px-2 py-0.5 rounded-full ${darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-800'}`}>Metadata</span>
+                                    </div>
+                                    <p className={`text-lg font-bold ${getScoreTextColorClass(analysisDetails.source_credibility)}`}>
+                                      {(analysisDetails.source_credibility * 100).toFixed(0)}%
+                                    </p>
+                                    <p className={`text-lg mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Based on media metadata source information</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Claims Found */}
+                            {analysisDetails.claims && analysisDetails.claims.length > 0 && (
+                              <div className="mt-4">
+                                <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Claims Analysis ({analysisDetails.claims_found || analysisDetails.claims.length})</h4>
+                                <div className={`border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
+                                  {analysisDetails.claims.map((claim, index) => (
+                                    <div key={index} className={`p-4 border-b last:border-b-0 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+                                      {/* Google Fact Check API claim format */}
+                                      {claim.source_type === 'google_fact_check' && (
+                                        <>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <p className={`font-semibold text-lg ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{claim.text}</p>
+                                            <span className="text-lg bg-blue-100 text-blue-800 px-2 py-1 rounded">Google Fact Check</span>
+                                          </div>
+                                          {claim.claimReview?.[0] && (
+                                              <div className="flex items-center mt-1">
+                                                <span className={`text-lg px-2 py-1 rounded mr-2 ${darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`}>
+                                                  {claim.claimReview[0].publisher?.name || 'Unknown Publisher'}
+                                                </span>
+                                                {claim.claimReview[0].url && (
+                                                  <span className="text-lg text-blue-600">
+                                                    <a href={claim.claimReview[0].url} target="_blank" rel="noopener noreferrer">
+                                                      View Source
+                                                    </a>
+                                                  </span>
+                                                )}
+                                              </div>
+                                          )}
+                                        </>
+                                      )}
+                                      
+                                      {/* Gemini AI claim format */}
+                                      {claim.source_type === 'gemini' && (
+                                        <>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <p className={`font-semibold text-lg ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{claim.text}</p>
+                                            {typeof claim.truthfulness === 'number' && (
+                                               <span className="text-lg bg-green-100 text-green-800 px-2 py-1 rounded">
+                                                 Gemini AI • {(claim.truthfulness * 100).toFixed(0)}% True
+                                               </span>
+                                            )}
+                                          </div>
+                                          
+                                          {typeof claim.truthfulness === 'number' && (
+                                              <div className={`mt-2 w-full rounded-full h-2 mb-3 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
+                                                <div 
+                                                  className={`h-2 rounded-full ${getScoreColorClass(claim.truthfulness)}`}
+                                                  style={{ width: `${claim.truthfulness * 100}%` }}
+                                                ></div>
+                                              </div>
+                                          )}
+                                          
+                                          {claim.evidence && (
+                                            <div className={`mt-2 mb-3 text-lg p-2 rounded ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-700'}`}>
+                                              <p><span className="font-semibold">Analysis:</span> {claim.evidence}</p>
+                                            </div>
+                                          )}
+                                          
+                                          {claim.sources && claim.sources.length > 0 && (
+                                            <div className="mt-2">
+                                              <p className={`text-lg font-semibold mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>SOURCES:</p>
+                                              <div className="flex flex-wrap gap-2">
+                                                {claim.sources.map((source, i) => (
+                                                   source.url ? (
+                                                    <a 
+                                                      key={i}
+                                                      href={source.url} 
+                                                      target="_blank" 
+                                                      rel="noopener noreferrer"
+                                                      className={`text-lg border px-2 py-1 rounded-full transition-colors ${darkMode ? 'bg-gray-600 border-gray-500 hover:bg-gray-500 text-gray-200' : 'bg-white border-gray-300 hover:bg-gray-50 text-gray-700'}`}
+                                                    >
+                                                      {source.name || new URL(source.url).hostname} 
+                                                    </a>
+                                                    ) : (
+                                                        <span key={i} className={`text-lg border px-2 py-1 rounded-full ${darkMode ? 'bg-gray-600 border-gray-500 text-gray-200' : 'bg-white border-gray-300 text-gray-700'}`}>
+                                                           {source.name || 'Unknown Source'}
+                                                        </span>
+                                                    )
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                      {!claim.source_type && (
+                                           <p className={`font-semibold text-lg ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{claim.text || JSON.stringify(claim)}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                   );
+                })()}
+                  </div>
+            )}
+
+            {/* --- END Unified Sections --- */}
+
           </div>
         )}
       </div>

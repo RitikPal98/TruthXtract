@@ -24,8 +24,12 @@ from google.cloud import speech
 import wave
 
 # For Google Fact Check API
-from googleapiclient.discovery import build
-from google.auth import default
+# from googleapiclient.discovery import build
+# from google.auth import default
+# from google.auth.exceptions import DefaultCredentialsError
+# import re # Already imported?
+# import spacy # Already imported?
+
 from google.auth.exceptions import DefaultCredentialsError
 from dotenv import load_dotenv
 import re
@@ -36,6 +40,9 @@ import cloudinary.api
 import numpy as np
 import requests
 
+# Import the new function
+from .google_fact_check import check_fact_google
+
 # For Google Gemini API
 # import google.generativeai as genai
 # import json
@@ -43,14 +50,21 @@ import requests
 # Import the specific function from the new module
 from .gemini_utils import check_fact_gemini
 
+from azure.core.credentials import AzureKeyCredential
+from azure.ai.vision.imageanalysis import ImageAnalysisClient
+from azure.ai.vision.imageanalysis.models import VisualFeatures
+import time 
+
 # Load spaCy model
 nlp = spacy.load('en_core_web_sm')
 
 # Load environment variables for API keys
 load_dotenv()
-FACT_CHECK_API_KEY = os.getenv("GOOGLE_FACT_CHECK_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+FACT_CHECK_API_KEY ="https://extractimagefromtext.cognitiveservices.azure.com/"
+NEWS_API_KEY = "4l26LaqOZMxHhs9dzuC7UdxQWvsiV8hOL2RgS5fryxtaIstsyfupJQQJ99BDACGhslBXJ3w3AAAFACOGcFyn"
 
+AZURE_VISION_ENDPOINT = "https://extractimagefromtext.cognitiveservices.azure.com/"
+AZURE_VISION_KEY = "4l26LaqOZMxHhs9dzuC7UdxQWvsiV8hOL2RgS5fryxtaIstsyfupJQQJ99BDACGhslBXJ3w3AAAFACOGcFyn"
 # Configure Cloudinary
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -327,64 +341,6 @@ RELIABLE_SOURCES = {
     'timesofindia.indiatimes.com': 0.80
 }
 
-def check_fact_google(query):
-    """Checks facts using Google Fact Check Tools API."""
-    if not FACT_CHECK_API_KEY:
-        return {"claims": [], "error": "FACT_CHECK_API_KEY not found in environment variables."}
-    if not query:
-         return {"claims": [], "error": "No query provided for fact-checking."}
-
-    try:
-        print(f"Checking facts for query (length {len(query)} chars) using Google Fact Check API...")
-        service = build("factchecktools", "v1alpha1", developerKey=FACT_CHECK_API_KEY)
-
-        # Use spaCy to extract key phrases
-        doc = nlp(query)
-        potential_claims = set()
-
-        # Extract named entities and noun chunks
-        for ent in doc.ents:
-            potential_claims.add(ent.text)
-        for chunk in doc.noun_chunks:
-            potential_claims.add(chunk.text)
-
-        # Also add sentences for more complete fact checking
-        sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 10]
-        potential_claims.update(sentences)
-
-        claims = []
-
-        for claim in potential_claims:
-            claim = claim.strip()
-            if not claim:
-                continue
-
-            # Limit query length
-            if len(claim) > 500:
-                claim = claim[:500]
-
-            request = service.claims().search(query=claim)
-            response = request.execute()
-
-            # Collect claims from each segment
-            claims.extend(response.get('claims', []))
-
-        print(f"Found {len(claims)} potential fact checks.")
-        return {"claims": claims, "error": None}
-
-    except DefaultCredentialsError as e:
-         error_msg = f"Google Cloud Auth Error (Fact Check API usually uses API Key): {e}"
-         print(f"Error: {error_msg}")
-         return {"claims": [], "error": error_msg}
-    except ImportError:
-         error_msg = "Google API Client library not found. Please install google-api-python-client."
-         print(f"Error: {error_msg}")
-         return {"claims": [], "error": error_msg}
-    except Exception as e:
-        error_msg = f"An error occurred during Google Fact Check API call: {e}"
-        print(f"Error: {error_msg}")
-        return {"claims": [], "error": error_msg}
-
 def check_if_basic_fact(text):
     """Check if text contains basic, well-known facts"""
     # Normalize text for matching
@@ -508,8 +464,9 @@ def analyze_transcript(transcript, video_metadata=None):
         
         # 3. Check with Google Fact Check API (secondary method, lower weight)
         fact_check_result = check_fact_google(transcript)
-        google_claims = fact_check_result.get("claims", [])
+        google_claims = fact_check_result.get("relevant_claims", [])
         fact_check_score = 0.8 if google_claims and len(google_claims) > 0 else 0.5
+        print(f"Google Fact Check found {len(google_claims)} relevant claims.")
         
         # 4. Verify with external news sources (tertiary method, lowest weight)
         verification_score = verify_with_external_sources(transcript)
@@ -557,14 +514,18 @@ def analyze_transcript(transcript, video_metadata=None):
                 "source_type": "gemini"  # Mark source as Gemini
             })
         
-        # Add Google claims (if Gemini didn't provide enough details)
+        # Add relevant Google claims 
         if len(all_claims) < 3 and google_claims:
-            for claim in google_claims[:3]:
-                all_claims.append({
-                    "text": claim.get("text", ""),
-                    "claimReview": claim.get("claimReview", []),
-                    "source_type": "google_fact_check"  # Mark source as Google Fact Check API
-                })
+            # Access the original claim data nested inside the 'claim_data' key
+            for relevant_claim in google_claims[:3]: # Limit to top 3 relevant claims
+                claim_data = relevant_claim.get("claim_data")
+                if claim_data:
+                    all_claims.append({
+                        "text": claim_data.get("text", ""),
+                        "claimReview": claim_data.get("claimReview", []),
+                        "similarity_score": relevant_claim.get("similarity_score"), # Include similarity
+                        "source_type": "google_fact_check"  
+                    })
         
         print(f"Analysis complete: score={final_score:.2f}, confidence={confidence:.2f}")
         # Create a separate section for Gemini claims to make it easier for the frontend to access
@@ -611,17 +572,6 @@ from PIL import Image
 # For handling URLs
 from urllib.parse import urlparse
 
-# Function to extract text from images using pytesseract
-def extract_text_from_image(image_path):
-    try:
-        image = Image.open(image_path)
-        text = pytesseract.image_to_string(image)
-        print(text)
-        return text
-    except Exception as e:
-        print(f"Error extracting text from image: {e}")
-        return ""
-
 # Function to fetch image and description from social media links
 def fetch_social_media_data(url):
     try:
@@ -653,7 +603,7 @@ def fetch_social_media_data(url):
 # Function to prepare data for Gemini Pro Vision fact-checking
 def prepare_fact_check_data(image_path=None, url=None):
     if image_path:
-        text = extract_text_from_image(image_path)
+        text = extract_text_from_image_azure(image_path)
         return {
             "image": image_path,
             "caption": text,
@@ -881,7 +831,7 @@ def process_media_for_fact_checking(image_path=None, url=None, download_path=TEM
             # Determine if the downloaded content is an image or video based on file extension
             if downloaded_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
                 # Process as image
-                extracted_text = extract_text_from_image(downloaded_path)
+                extracted_text = extract_text_from_image_azure(downloaded_path)
                 if not extracted_text or len(extracted_text.strip()) < 10:
                     extracted_text = "Image contains insufficient text for analysis."
                 
@@ -955,7 +905,7 @@ def process_media_for_fact_checking(image_path=None, url=None, download_path=TEM
         elif image_path:
             final_media_path = image_path # Path is already known
             is_video = False # It's an image
-            extracted_text = extract_text_from_image(image_path)
+            extracted_text = extract_text_from_image_azure(image_path)
             if not extracted_text or len(extracted_text.strip()) < 10:
                 extracted_text = "Image contains insufficient text for analysis."
             
@@ -985,3 +935,67 @@ def process_media_for_fact_checking(image_path=None, url=None, download_path=TEM
             "is_video": is_video
         }
         return results
+
+def extract_text_from_image_azure(image_path_or_url):
+    """Extracts text from an image file path or a public URL using Azure Computer Vision Read API."""
+    if not (AZURE_VISION_ENDPOINT and AZURE_VISION_KEY):
+        error_msg = "Azure Vision API endpoint or key not configured in environment variables."
+        print(f"Error: {error_msg}")
+        return f"Error: {error_msg}"
+
+    print(f"Attempting OCR with Azure Vision on: {image_path_or_url}")
+    try:
+        client = ImageAnalysisClient(
+            endpoint=AZURE_VISION_ENDPOINT,
+            credential=AzureKeyCredential(AZURE_VISION_KEY)
+        )
+
+        # Determine input type
+        if image_path_or_url.startswith(('http://', 'https://')):
+            print("Analyzing image from URL.")
+            result = client.analyze_from_url(
+                image_url=image_path_or_url,
+                visual_features=[VisualFeatures.READ] # Specify READ feature for OCR
+            )
+        else:
+            # Handle local file path input
+            if not os.path.exists(image_path_or_url):
+                print(f"Error: Local image file not found: {image_path_or_url}")
+                return f"Error: Local image file not found."
+            print("Analyzing image from local file.")
+            with open(image_path_or_url, "rb") as f:
+                image_data = f.read()
+            result = client.analyze(
+                image_data=image_data,
+                visual_features=[VisualFeatures.READ]
+            )
+
+        # Process the OCR result
+        extracted_text = ""
+        if result.read is not None and result.read.blocks:
+            extracted_text = "\n".join([
+                line.text 
+                for block in result.read.blocks 
+                for line in block.lines
+            ])
+            print(f"Azure Vision OCR successful, extracted {len(extracted_text)} characters.")
+        else:
+            print("Azure Vision OCR: No text found or result.read was None.")
+            
+        return extracted_text
+
+    except ImportError:
+         error_msg = "Azure AI Vision SDK not found. Please install azure-ai-vision-imageanalysis."
+         print(f"Error: {error_msg}")
+         return f"Error: {error_msg}"
+    except Exception as e:
+        # Catch potential Azure SDK errors or other issues
+        error_type = type(e).__name__
+        print(f"Error during Azure Vision OCR ({error_type}): {e}")
+        # Attempt to extract more specific error details if available
+        error_details = str(e)
+        if hasattr(e, 'message'):
+            error_details = e.message
+        elif hasattr(e, 'reason'):
+            error_details = e.reason 
+        return f"Error during Azure OCR processing: {error_details}"

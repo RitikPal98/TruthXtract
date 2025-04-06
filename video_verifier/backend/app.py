@@ -5,13 +5,13 @@ import uuid
 from utils.video_processing import (
     extract_keyframes, 
     extract_metadata,
-    extract_audio, 
+    extract_audio,
+    extract_text_from_image_azure, 
     transcribe_audio_google,
     check_fact_google,
     analyze_transcript,
     download_content_from_url,
     process_media_for_fact_checking,
-    extract_text_from_image,
     check_fact_gemini
 )
 import cloudinary
@@ -250,7 +250,7 @@ def analyze_media():
                 # 2. Extract Text using OCR from the Cloudinary URL (if available)
                 if cloudinary_url:
                      print(f"Extracting text from Cloudinary URL: {cloudinary_url}")
-                     ocr_text = extract_text_from_image(cloudinary_url) # Pass URL
+                     ocr_text = extract_text_from_image_azure(cloudinary_url) # Pass URL
                      results['ocr_text'] = ocr_text if ocr_text else "No text found in image."
                      print(f"OCR Result: {results['ocr_text'][:100]}...")
                 else:
