@@ -7,6 +7,7 @@ import uuid
 import re
 import requests
 from urllib.parse import urlparse
+import mimetypes
 
 # Using Hachoir for metadata extraction
 from hachoir.parser import createParser
@@ -56,42 +57,55 @@ cloudinary.config(
 
 # Configure Gemini API
 GEMINI_API_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'projecttx-8c3a581eb089.json')
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # Read from environment first
 
 try:
+    gemini_key_source = None
     # Initialize Gemini API
     if GEMINI_API_KEY:
         # Use API key from environment variable if available
         genai.configure(api_key=GEMINI_API_KEY)
-        print("Gemini API configured with API key from environment")
+        gemini_key_source = "environment variable"
     else:
-        # Try to load credentials from service account file
+        # Try to load credentials from service account file as a fallback
+        print(f"GEMINI_API_KEY environment variable not set. Trying file: {GEMINI_API_KEY_FILE}")
         try:
             # Read the service account JSON file
             with open(GEMINI_API_KEY_FILE, 'r') as f:
                 creds_data = json.load(f)
             
-            if 'api_key' in creds_data:
+            if 'api_key' in creds_data and creds_data['api_key']:
                 genai.configure(api_key=creds_data['api_key'])
-                print("Gemini API configured with API key from service account file")
+                gemini_key_source = "service account file"
             else:
-                print("Service account file doesn't contain an API key")
+                print("Service account file exists but does not contain a valid 'api_key' field.")
+        except FileNotFoundError:
+             print(f"Warning: Service account file not found at {GEMINI_API_KEY_FILE}. Cannot configure Gemini from file.")
+        except json.JSONDecodeError:
+             print(f"Error: Failed to parse JSON from service account file: {GEMINI_API_KEY_FILE}")
         except Exception as file_error:
             print(f"Error reading service account file: {file_error}")
-    
-    # Set up model configuration
-    generation_config = {
-        "temperature": 0.2,  # More factual/deterministic outputs
-        "top_p": 0.95,
-        "top_k": 64,
-        "max_output_tokens": 2048,
-    }
-    
-    # Use Gemini Pro as the default model for fact-checking
-    gemini_model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25', generation_config=generation_config)
-    print("Gemini model initialized successfully")
+
+    # Check if configuration was successful from either source
+    if gemini_key_source:
+        print(f"Gemini API configured successfully using key from: {gemini_key_source}")
+        # Set up model configuration
+        generation_config = {
+            "temperature": 0.2,  # More factual/deterministic outputs
+            "top_p": 0.95,
+            "top_k": 64,
+            "max_output_tokens": 2048,
+        }
+        
+        # Use Gemini Pro as the default model for fact-checking
+        gemini_model = genai.GenerativeModel('gemini-pro', generation_config=generation_config)
+        print("Gemini model initialized successfully (gemini-pro).")
+    else:
+        print("Failed to configure Gemini API key from environment or file. Gemini features will be unavailable.")
+        gemini_model = None # Explicitly set model to None if configuration failed
+
 except Exception as e:
-    print(f"Error configuring Gemini API: {e}")
+    print(f"Error during Gemini configuration or model initialization: {e}")
     gemini_model = None
 
 
@@ -784,6 +798,7 @@ def extract_text_from_image(image_path):
     try:
         image = Image.open(image_path)
         text = pytesseract.image_to_string(image)
+        print(tex)
         return text
     except Exception as e:
         print(f"Error extracting text from image: {e}")
@@ -838,11 +853,16 @@ def prepare_fact_check_data(image_path=None, url=None):
 
 # Import pytube for video downloading
 from pytube import YouTube
+from pytube.exceptions import PytubeError # Import specific exception
+
+# Import yt-dlp
+import yt_dlp
 
 # Function to download content from URL
 def download_content_from_url(url, download_path):
     """
     Download content from a URL, handling both images and videos.
+    Uses yt-dlp for YouTube videos, requests for images and other videos.
     Returns the path where the content is saved.
     """
     try:
@@ -853,99 +873,193 @@ def download_content_from_url(url, download_path):
 
         # Determine if URL is likely an image or video
         lower_url = url.lower()
-        if any(ext in lower_url for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']):
-            # Handle image URL
+        is_youtube_url = "youtube.com/watch?v=" in lower_url or "youtu.be/" in lower_url
+
+        if is_youtube_url:
+            # Handle YouTube video with yt-dlp
+            print(f"Attempting YouTube download with yt-dlp: {url}")
             try:
-                # Use requests to download the image
-                response = requests.get(url, stream=True, timeout=10)
-                if response.status_code != 200:
-                    print(f"Failed to download image: HTTP status {response.status_code}")
+                # Define filename template and output path
+                # Use %(title)s and %(id)s for safe filename, limit length
+                # Ensure the output template includes the file extension via .%(ext)s
+                output_template = os.path.join(download_path, f"%(title).100s_%(id)s.%(ext)s")
+                
+                ydl_opts = {
+                    # Request specific progressive MP4 format codes (video+audio)
+                    # 22 = 720p, 18 = 360p. Fallback to best generic mp4.
+                    'format': '22/18/best[ext=mp4]/best',
+                    'outtmpl': output_template,
+                    'noplaylist': True, # Only download single video
+                    'verbose': True, # Enable verbose output for debugging
+                    'restrictfilenames': True, # Ensure filenames are ASCII
+                }
+
+                print(f"yt-dlp options: {ydl_opts}") # Log options
+                downloaded_file = None # Initialize
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        print("Running ydl.extract_info...")
+                        info_dict = ydl.extract_info(url, download=True)
+                        # Get the downloaded filename from info_dict
+                        downloaded_file = ydl.prepare_filename(info_dict)
+                        print(f"yt-dlp finished. Expected filename: {downloaded_file}")
+                except Exception as ydl_exec_err:
+                     print(f"Error during yt-dlp execution: {ydl_exec_err}")
+                     # Potentially re-raise or return None depending on desired handling
+                     raise # Re-raise the error for now to see it clearly
+                
+                # Check if download actually happened and file exists
+                if downloaded_file and os.path.exists(downloaded_file):
+                    print(f"Confirmed: YouTube video downloaded via yt-dlp to {downloaded_file}")
+                    return downloaded_file
+                else:
+                    # This might happen if simulate=True or download failed silently
+                    print(f"yt-dlp finished, but expected file NOT found at: {downloaded_file}")
+                    # Attempt to find the file if the extension was different (less likely with specific format codes)
+                    if downloaded_file:
+                        base_name = os.path.splitext(downloaded_file)[0]
+                        for ext in ['.mp4', '.mkv', '.webm']: # Common video extensions
+                            potential_file = base_name + ext
+                            print(f"Checking alternative path: {potential_file}")
+                            if os.path.exists(potential_file):
+                                print(f"Found downloaded file with different extension: {potential_file}")
+                                return potential_file
+                    print("Could not confirm downloaded file location.")
                     return None
-                
-                # Save image to a temporary file
-                image_filename = f"temp_image_{uuid.uuid4()}.png"
+
+            except yt_dlp.utils.DownloadError as dl_err:
+                # Handle specific yt-dlp download errors
+                print(f"yt-dlp download error for {url}: {dl_err}")
+                return None
+            except Exception as e:
+                print(f"Unexpected error during yt-dlp download for {url}: {type(e).__name__}: {e}")
+                return None
+
+        elif any(ext in lower_url for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']):
+            # Handle image download with requests
+            print(f"Attempting image download: {url}")
+            try:
+                response = requests.get(url, stream=True, timeout=10)
+                response.raise_for_status()
+
+                parsed_url = urlparse(url)
+                _, ext = os.path.splitext(parsed_url.path)
+                if not ext or ext.lower() not in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                    # Guess extension from Content-Type if path extension is missing/unreliable
+                    content_type = response.headers.get('content-type')
+                    guessed_ext = mimetypes.guess_extension(content_type.split(';')[0].strip()) if content_type else None
+                    ext = guessed_ext if guessed_ext and guessed_ext.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp'] else '.png'
+
+                image_filename = f"temp_image_{uuid.uuid4().hex[:12]}{ext}"
                 image_path = os.path.join(download_path, image_filename)
-                
+
                 with open(image_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                
+
                 print(f"Image downloaded and saved to {image_path}")
                 return image_path
+            except requests.exceptions.RequestException as req_e:
+                print(f"Error downloading image: {req_e}")
+                return None
             except Exception as e:
-                print(f"Error downloading image: {e}")
+                print(f"Unexpected error downloading image: {e}")
                 return None
         else:
-            # Handle video URL
+            # Handle direct video download (non-YouTube) with requests
+            print(f"Attempting direct download for non-YouTube video: {url}")
+            # ... (existing direct download logic remains largely the same) ...
             try:
-                # Try YouTube first
-                yt = YouTube(url)
-                print(f"Available YouTube streams for {url}:")
-                for stream in yt.streams.filter():
-                    print(f"  Stream: {stream}, Progressive: {stream.is_progressive}, Has Audio: {hasattr(stream, 'abr') and stream.abr is not None}")
-                
-                # Prioritize streams with both video and audio
-                video_stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
-                
-                # If no progressive stream found, try a different approach
-                if not video_stream:
-                    print("No progressive stream found, trying to find any stream with audio...")
-                    video_stream = yt.streams.filter(file_extension='mp4').first()
-                
-                if video_stream:
-                    print(f"Selected stream: {video_stream}")
-                    video_path = video_stream.download(output_path=download_path)
-                    print(f"YouTube video downloaded to {video_path}")
-                    return video_path
+                # (Keep the existing logic for deriving base_filename, sanitizing, guessing extension)
+                parsed_url = urlparse(url)
+                if parsed_url.path and len(parsed_url.path) > 1:
+                    base_filename = os.path.basename(parsed_url.path)
                 else:
-                    print("No suitable YouTube stream found.")
-                    return None
-            except Exception as e:
-                print(f"Error downloading video from YouTube: {e}")
-                # If YouTube fails, try direct download for other types of videos
-                try:
-                    video_filename = f"temp_video_{uuid.uuid4()}.mp4"
-                    video_path = os.path.join(download_path, video_filename)
-                    
-                    response = requests.get(url, stream=True, timeout=30)
-                    if response.status_code != 200:
-                        print(f"Failed to download video: HTTP status {response.status_code}")
-                        return None
-                    
-                    with open(video_path, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    
-                    print(f"Video downloaded directly to {video_path}")
-                    return video_path
-                except Exception as direct_e:
-                    print(f"Error downloading video directly: {direct_e}")
-                    return None
+                    fallback_name = (parsed_url.netloc + parsed_url.path + parsed_url.query).replace('/', '_').replace('?', '_').replace('=', '_')
+                    base_filename = fallback_name[:100] if fallback_name else f"temp_video_{uuid.uuid4().hex[:8]}"
+                
+                safe_base_filename = re.sub(r'[^\\w\\-_\\.]', '_', base_filename)
+                if not safe_base_filename or safe_base_filename == '_':
+                    safe_base_filename = f"temp_video_{uuid.uuid4().hex[:8]}"
+
+                name_part, ext = os.path.splitext(safe_base_filename)
+                common_video_exts = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv']
+                if not ext or ext.lower() not in common_video_exts:
+                    try:
+                        head_response = requests.head(url, timeout=10, allow_redirects=True)
+                        content_type = head_response.headers.get('content-type')
+                        if content_type:
+                            guessed_ext = mimetypes.guess_extension(content_type.split(';')[0].strip())
+                            if guessed_ext and guessed_ext.lower() in common_video_exts:
+                                ext = guessed_ext
+                            else:
+                                ext = ".mp4"
+                        else:
+                            ext = ".mp4"
+                    except requests.exceptions.RequestException:
+                        ext = ".mp4"
+                
+                if not name_part:
+                    name_part = safe_base_filename
+
+                video_filename = f"{name_part}_{uuid.uuid4().hex[:8]}{ext}"
+                video_path = os.path.join(download_path, video_filename)
+                print(f"Saving downloaded video to: {video_path}")
+
+                # Actual download using requests
+                response = requests.get(url, stream=True, timeout=30)
+                response.raise_for_status()
+                with open(video_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                print(f"Video downloaded directly to {video_path}")
+                return video_path
+            except requests.exceptions.RequestException as req_e:
+                print(f"Error downloading non-YouTube video: {req_e}")
+                return None
+            except Exception as direct_e:
+                print(f"Unexpected error during direct video download: {type(direct_e).__name__}: {direct_e}")
+                return None
+
     except Exception as e:
-        print(f"General error processing URL: {e}")
+        print(f"General error processing URL {url}: {type(e).__name__}: {e}")
         return None
+
+# Remove PytubeError import if pytube is no longer used
+# (Commented out for now, can be deleted later if stable)
+# from pytube.exceptions import PytubeError 
 
 # For backward compatibility
 def download_video_from_url(url, download_path):
     return download_content_from_url(url, download_path)
 
 # Function to handle image uploads and social media links for fact-checking
-def process_media_for_fact_checking(image_path=None, url=None):
+def process_media_for_fact_checking(image_path=None, url=None, download_path=TEMP_DIR):
     """
     Process media (image or URL) for fact-checking.
     Handles both images and videos from various sources.
+    Saves downloaded content to the specified download_path.
+    Returns analysis results and the final path of the downloaded media if applicable.
     """
+    final_media_path = None # Keep track of the final downloaded file path
+    is_video = False      # Keep track if downloaded content is a video
+    results = {}          # Initialize results dict
+
     try:
         # Handle URL first
         if url:
             print(f"Processing URL: {url}")
-            downloaded_path = download_content_from_url(url, TEMP_DIR)
+            # Pass the specified download_path to the download function
+            downloaded_path = download_content_from_url(url, download_path)
             
             if not downloaded_path:
-                return {
-                    "error": "Failed to download content from URL."
-                }
+                results = {"error": "Failed to download content from URL."}
+                results["downloaded_media_path"] = None
+                results["is_video"] = False # Ensure flag is set even on download failure
+                return results
             
+            final_media_path = downloaded_path # Store the path
+
             # Determine if the downloaded content is an image or video based on file extension
             if downloaded_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
                 # Process as image
@@ -955,9 +1069,12 @@ def process_media_for_fact_checking(image_path=None, url=None):
                 
                 print(f"Extracted text from image: {extracted_text[:100]}...")
                 # Use Gemini for fact-checking
-                return check_fact_gemini(extracted_text)
+                results = check_fact_gemini(extracted_text)
+                is_video = False # It's an image
+
             else:
                 # Process as video
+                is_video = True # Mark as video
                 try:
                     # First, try to get video metadata for source credibility
                     metadata = {}
@@ -998,45 +1115,55 @@ def process_media_for_fact_checking(image_path=None, url=None):
                         print(f"Using extracted text for analysis: {video_text[:100]}...")
                         # Use Gemini for fact-checking on the title/description
                         if len(video_text) > 10:
-                            return check_fact_gemini(video_text)
+                            results = check_fact_gemini(video_text)
                         else:
-                            return {
-                                "error": "Could not extract audio or meaningful text from video."
-                            }
+                            results = {"error": "Could not extract audio or meaningful text from video."}
                     
                     # Normal path - we have audio
-                    transcript_data = transcribe_audio_google(audio_path)
-                    if not transcript_data or not transcript_data.get('transcript'):
-                        return {
-                            "error": "Could not extract meaningful transcript from video."
-                        }
-                    
-                    # Return transcript analysis with metadata
-                    return analyze_transcript(transcript_data['transcript'], metadata)
+                    else:
+                        transcript_data = transcribe_audio_google(audio_path)
+                        print(transcript_data)
+                        if not transcript_data or not transcript_data.get('transcript'):
+                            results = {"error": "Could not extract meaningful transcript from video."}
+                        else:
+                            # Return transcript analysis with metadata
+                            results = analyze_transcript(transcript_data['transcript'], metadata)
                     
                 except Exception as e:
                     print(f"Error processing video: {e}")
-                    return {
-                        "error": f"Error processing video content: {str(e)}"
-                    }
+                    results = {"error": f"Error processing video content: {str(e)}"}
         
-        # Handle image path
+        # Handle image path (uploaded image)
         elif image_path:
+            final_media_path = image_path # Path is already known
+            is_video = False # It's an image
             extracted_text = extract_text_from_image(image_path)
             if not extracted_text or len(extracted_text.strip()) < 10:
                 extracted_text = "Image contains insufficient text for analysis."
             
             print(f"Extracted text from image: {extracted_text[:100]}...")
             # Use Gemini for fact-checking
-            return check_fact_gemini(extracted_text)
+            results = check_fact_gemini(extracted_text)
         
         else:
-            return {
-                "error": "No image or URL provided."
-            }
+            results = {"error": "No image or URL provided."}
+            results["downloaded_media_path"] = None
+            results["is_video"] = False
+            return results
+
+        # Add the final path and type to the results dictionary before returning
+        # Ensure these keys exist even if analysis (like Gemini) failed
+        if "error" not in results: results["error"] = None # Add error key if missing
+        results["downloaded_media_path"] = final_media_path
+        results["is_video"] = is_video # Indicate if the downloaded content was a video
+        return results
     
     except Exception as e:
         print(f"Error in process_media_for_fact_checking: {e}")
-        return {
-            "error": f"Failed to process media: {str(e)}"
+        # Ensure keys exist even on top-level error
+        results = {
+            "error": f"Failed to process media: {str(e)}",
+            "downloaded_media_path": final_media_path, 
+            "is_video": is_video
         }
+        return results

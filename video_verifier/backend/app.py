@@ -10,8 +10,11 @@ from utils.video_processing import (
     check_fact_google,
     analyze_transcript,
     download_content_from_url,
-    process_media_for_fact_checking
+    process_media_for_fact_checking,
+    extract_text_from_image,
+    check_fact_gemini
 )
+import cloudinary
 
 app = Flask(__name__, static_folder='../keyframes', static_url_path='/keyframes')
 CORS(app) # Enable CORS for all routes
@@ -28,6 +31,13 @@ if not os.path.exists(TEMP_AUDIO_FOLDER):
 if not os.path.exists(KEYFRAMES_FOLDER):
     os.makedirs(KEYFRAMES_FOLDER)
 
+print(f"UPLOAD_FOLDER absolute path: {os.path.abspath(UPLOAD_FOLDER)}") # Add logging
+
+# Route to serve uploaded files
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
 @app.route('/analyze', methods=['POST'])
 def analyze_media():
     # Check if any media source is provided
@@ -38,86 +48,108 @@ def analyze_media():
     image_path = None  # Initialize image_path
     url = None        # Initialize URL
     audio_path = None  # Initialize audio_path
-    results = {}
+    results = {} # Initialize results dict for the response
     transcript_data = {"transcript": None, "error": None}
     fact_check_data = {"claims": [], "error": None}
     media_type = "unknown"
+    uploaded_video_filename = None # Store filename if video is uploaded
 
-    # Case 1: URL was provided
-    if 'url' in request.form and request.form['url'].strip():
-        url = request.form['url'].strip()
-        print(f"Processing content from URL: {url}")
-        
-        # Use the enhanced process_media_for_fact_checking function which handles both images and videos
-        media_result = process_media_for_fact_checking(url=url)
-        
-        # If there was an error processing the URL
-        if 'error' in media_result:
-            return jsonify({"error": media_result['error']}), 400
+    # Determine input type and get initial file path
+    # -------------------------------------------------
+    try:
+        if 'url' in request.form and request.form['url'].strip():
+            url = request.form['url'].strip()
+            print(f"Processing content from URL: {url}")
             
-        # Add the URL processing result to our response
-        results['url_analysis'] = media_result
-        results['media_type'] = 'url'
-        return jsonify(results)
+            # Download content from URL to UPLOAD_FOLDER
+            downloaded_path = download_content_from_url(url, UPLOAD_FOLDER)
+            
+            if not downloaded_path:
+                return jsonify({"error": "Failed to download content from URL."}), 400
+            
+            # Check downloaded file type
+            _, ext = os.path.splitext(downloaded_path)
+            ext = ext.lower()
+            common_video_exts = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv']
+            common_image_exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
 
-    # Case 2: Media file (video or image) was uploaded
-    elif 'media' in request.files:
-        file = request.files['media']
-        if file.filename == '':
-            return jsonify({"error": "Empty file provided"}), 400
+            if ext in common_video_exts:
+                video_path = downloaded_path
+                media_type = "video"
+                uploaded_video_filename = os.path.basename(video_path) # Mark for serving
+                print(f"Downloaded video from URL: {video_path}")
+            elif ext in common_image_exts:
+                image_path = downloaded_path
+                media_type = "image"
+                print(f"Downloaded image from URL: {image_path}")
+            else:
+                 # Clean up unsupported file
+                 if os.path.exists(downloaded_path):
+                     os.remove(downloaded_path)
+                 return jsonify({"error": f"Unsupported file type downloaded from URL: {ext}"}), 400
+
+        elif 'media' in request.files:
+            file = request.files['media']
+            if file.filename == '':
+                return jsonify({"error": "Empty file provided"}), 400
             
-        # Determine file type based on extension
-        _, ext = os.path.splitext(file.filename)
-        ext = ext.lower()
-        
-        # Save the uploaded file temporarily
-        temp_filename = str(uuid.uuid4()) + ext
-        temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
-        
-        try:
+            # Determine file type based on extension
+            _, ext = os.path.splitext(file.filename)
+            ext = ext.lower()
+            temp_filename = str(uuid.uuid4()) + ext
+            temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
             file.save(temp_path)
             print(f"Media saved to {temp_path}")
             
-            # Handle based on file type
-            if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-                # Process as image
-                image_path = temp_path
-                media_type = "image"
-                media_result = process_media_for_fact_checking(image_path=image_path)
-                results['image_analysis'] = media_result
-                results['media_type'] = 'image'
-                return jsonify(results)
-            else:
-                # Process as video
+            common_video_exts = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv'] # Redefine locally
+            common_image_exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp'] # Redefine locally
+
+            if ext in common_video_exts:
                 video_path = temp_path
                 media_type = "video"
-                
-                # Metadata Extraction
-                results['metadata'] = extract_metadata(video_path)
-                
-                # Keyframe Extraction
-                results['keyframes'] = extract_keyframes(video_path, output_dir=KEYFRAMES_FOLDER)
-                
-        except Exception as e:
-            print(f"Error processing media file: {e}")
-            return jsonify({"error": f"Failed to process media: {str(e)}"}), 500
-            
-    # Case 3: Specific video file was uploaded (legacy support)
-    elif 'video' in request.files:
-        file = request.files['video']
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
+                uploaded_video_filename = temp_filename # Store the filename for serving
+            elif ext in common_image_exts:
+                image_path = temp_path
+                media_type = "image"
+            else:
+                 # Clean up unsupported file
+                 if os.path.exists(temp_path):
+                     os.remove(temp_path)
+                 return jsonify({"error": f"Unsupported file type uploaded: {ext}"}), 400
 
-        # Save the uploaded video temporarily
-        _, ext = os.path.splitext(file.filename)
-        temp_filename = str(uuid.uuid4()) + ext
-        video_path = os.path.join(UPLOAD_FOLDER, temp_filename)
-        media_type = "video"
-
-        try:
+        # Legacy support (Treat 'video' and 'image' uploads like 'media')
+        elif 'video' in request.files:
+            file = request.files['video']
+            if file.filename == '': return jsonify({"error": "No selected file"}), 400
+            _, ext = os.path.splitext(file.filename)
+            temp_filename = str(uuid.uuid4()) + ext
+            video_path = os.path.join(UPLOAD_FOLDER, temp_filename)
             file.save(video_path)
+            media_type = "video"
+            uploaded_video_filename = temp_filename
             print(f"Video saved to {video_path}")
+        elif 'image' in request.files:
+            file = request.files['image']
+            if file.filename == '': return jsonify({"error": "No selected image"}), 400
+            _, ext = os.path.splitext(file.filename)
+            temp_filename = str(uuid.uuid4()) + ext
+            image_path = os.path.join(UPLOAD_FOLDER, temp_filename)
+            file.save(image_path)
+            media_type = "image"
+            print(f"Image saved to {image_path}")
+        
+    except Exception as setup_error:
+        print(f"Error during file setup/download: {setup_error}")
+        return jsonify({"error": f"Failed during setup: {str(setup_error)}"}), 500
 
+    # Process based on determined media type
+    # --------------------------------------
+    try:
+        if media_type == "video":
+            print("--- Processing Video --- ")
+            if not video_path:
+                 return jsonify({"error": "Video processing error: Video path not set."}), 500
+                
             # --- Metadata Extraction ---
             print("Extracting metadata...")
             results['metadata'] = extract_metadata(video_path)
@@ -125,98 +157,145 @@ def analyze_media():
             # --- Keyframe Extraction ---
             print("Extracting keyframes...")
             results['keyframes'] = extract_keyframes(video_path, output_dir=KEYFRAMES_FOLDER)
-
-        except Exception as e:
-            print(f"Error processing video: {e}")
-            return jsonify({"error": f"Failed to process video: {str(e)}"}), 500
             
-    # Case 4: Specific image file was uploaded
-    elif 'image' in request.files:
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({"error": "No selected image"}), 400
-            
-        # Save the uploaded image temporarily
-        _, ext = os.path.splitext(file.filename)
-        temp_filename = str(uuid.uuid4()) + ext
-        image_path = os.path.join(UPLOAD_FOLDER, temp_filename)
-        media_type = "image"
-        
-        try:
-            file.save(image_path)
-            print(f"Image saved to {image_path}")
-            
-            # Process the image with the enhanced function
-            media_result = process_media_for_fact_checking(image_path=image_path)
-            results['image_analysis'] = media_result
-            results['media_type'] = 'image'
-            return jsonify(results)
-            
-        except Exception as e:
-            print(f"Error processing image: {e}")
-            return jsonify({"error": f"Failed to process image: {str(e)}"}), 500
-
-    # Process Video: Only run this section for videos
-    if media_type == "video":
-        # --- Audio Extraction --- 
-        print("Extracting audio...")
-        audio_path = extract_audio(video_path, output_dir=TEMP_AUDIO_FOLDER)
-        
-        # --- Transcription --- 
-        if audio_path:
-            print("Transcribing audio...")
-            transcript_data = transcribe_audio_google(audio_path)
-            results['transcription'] = transcript_data
-        else:
-            print("Audio extraction failed, trying alternative approach for video analysis...")
-            # Try to get metadata as a fallback
-            try:
-                metadata = extract_metadata(video_path)
-                title = metadata.get('title', os.path.basename(video_path))
-                duration = metadata.get('duration', "Unknown")
-                results['metadata'] = metadata
-                
-                # Generate a placeholder transcript for analysis
-                placeholder_text = f"Video titled '{title}' with duration {duration}. No audio content could be extracted for transcription."
-                transcript_data = {"transcript": placeholder_text, "error": "Audio extraction failed but proceeding with limited analysis."}
+            # --- Audio Extraction & Transcription --- 
+            print("Extracting audio...")
+            # NOTE: TEMP_AUDIO_FOLDER is defined globally
+            audio_path = extract_audio(video_path, output_dir=TEMP_AUDIO_FOLDER)
+            transcript_data = {"transcript": None, "error": None} # Reset transcript data
+            if audio_path:
+                print("Transcribing audio...")
+                transcript_data = transcribe_audio_google(audio_path)
                 results['transcription'] = transcript_data
-                print(f"Generated placeholder analysis for video: {placeholder_text}")
-            except Exception as meta_error:
-                print(f"Failed to extract metadata as fallback: {meta_error}")
-                results['transcription'] = {"transcript": None, "error": "Audio could not be extracted or video has no audio track."}
+                # Audio is cleaned up within transcribe_audio_google
+            else:
+                print("Audio extraction failed or no audio track.")
+                # Generate placeholder transcript using metadata if available
+                try:
+                    metadata = results.get('metadata', extract_metadata(video_path))
+                    title = metadata.get('title', os.path.basename(video_path))
+                    duration = metadata.get('duration', "Unknown")
+                    placeholder_text = f"Video titled '{title}' with duration {duration}. No audio content could be extracted for transcription."
+                    transcript_data = {"transcript": placeholder_text, "error": "Audio extraction failed but proceeding with limited analysis."}
+                    results['transcription'] = transcript_data
+                    print(f"Generated placeholder analysis for video: {placeholder_text}")
+                except Exception as meta_fallback_error:
+                    print(f"Failed to get metadata for placeholder: {meta_fallback_error}")
+                    results['transcription'] = {"transcript": None, "error": "Audio could not be extracted or video has no audio track."}
 
-        # --- Fact Checking --- 
-        if transcript_data['transcript']:
-            print("Performing fact check...")
-            # Basic fact checking (original method)
-            fact_check_data = check_fact_google(transcript_data['transcript'])
-            results['fact_checks'] = fact_check_data
+            # --- Fact Checking & Analysis --- 
+            if transcript_data and transcript_data['transcript']:
+                print("Performing transcript analysis...")
+                # Call comprehensive analysis function
+                transcript_analysis = analyze_transcript(
+                    transcript_data['transcript'],
+                    results.get('metadata') # Pass metadata if already extracted
+                )
+                results['transcript_analysis'] = transcript_analysis
+                # Optional: Add back basic Google Fact Check if needed
+                # fact_check_data = check_fact_google(transcript_data['transcript'])
+                # results['fact_checks'] = fact_check_data
+            else:
+                 print("Skipping fact check/analysis: No transcript available.")
+                 # results['fact_checks'] = {"claims": [], "error": "Fact check skipped: No transcript available."}
+                 results['transcript_analysis'] = {
+                     "verification_score": 0.5,
+                     "confidence": 0.0,
+                     "analysis": {"error": "Analysis skipped: No transcript available."}
+                 }
+
+            # Add video URL if it needs serving (set earlier for uploads/URL downloads)
+            if uploaded_video_filename:
+                results['video_url'] = f'/uploads/{uploaded_video_filename}'
+
+            # Cleanup - Delete the main video file ONLY if it was downloaded from a URL
+            # and we are NOT serving it (uploaded_video_filename is None). 
+            # Currently, we serve all downloaded videos, so no cleanup here.
+            # Add specific cleanup logic if needed for non-served URL downloads.
             
-            # Comprehensive transcript analysis with multiple verification methods
-            print("Performing comprehensive transcript analysis...")
-            transcript_analysis = analyze_transcript(
-                transcript_data['transcript'],
-                results['metadata'] if 'metadata' in results else None
-            )
-            results['transcript_analysis'] = transcript_analysis
-        else:
-             results['fact_checks'] = {"claims": [], "error": "Fact check skipped: No transcript available."}
-             results['transcript_analysis'] = {
-                 "verification_score": 0.5,
-                 "confidence": 0.0,
-                 "analysis": {"error": "Analysis skipped: No transcript available."}
-             }
+            results['media_type'] = 'video'
 
-        # Clean up uploaded video (optional: keep for debugging)
-        if video_path and os.path.exists(video_path):
+        elif media_type == "image":
+            print("--- Processing Image --- ")
+            if not image_path:
+                 return jsonify({"error": "Image processing error: Image path not set."}), 500
+            
+            temp_image_path = image_path # Keep track of the temporary local path
+            cloudinary_url = None
+            ocr_text = ""
+
             try:
-                os.remove(video_path)
-                print(f"Removed temporary video file: {video_path}")
-            except OSError as e:
-                print(f"Warning: Could not remove temporary video file {video_path}: {e}")
-        # Audio is cleaned up within transcribe_audio_google
-        
-        results['media_type'] = 'video'
+                # 1. Upload the image to Cloudinary FIRST
+                print(f"Uploading image {temp_image_path} to Cloudinary...")
+                try:
+                    upload_result = cloudinary.uploader.upload(
+                        temp_image_path,
+                        folder="truthxtract_uploads" # Optional: specify a folder in Cloudinary
+                    )
+                    cloudinary_url = upload_result.get('secure_url')
+                    if cloudinary_url:
+                        print(f"Image uploaded to Cloudinary: {cloudinary_url}")
+                        results['image_url'] = cloudinary_url # Use the public Cloudinary URL
+                    else:
+                        print("Warning: Cloudinary upload succeeded but no secure_url received.")
+                        results['image_url'] = None # Indicate URL is not available
+                        cloudinary_url = None # Ensure cloudinary_url is None
+                except Exception as upload_error:
+                    print(f"Error uploading image to Cloudinary: {upload_error}")
+                    results['image_url'] = None # Indicate URL is not available
+                    cloudinary_url = None # Ensure cloudinary_url is None
+                    # Optionally add this error to the main results error field
+                    results['error'] = results.get('error', '') + f" Cloudinary upload failed: {upload_error};" 
+                
+                # 2. Extract Text using OCR from the Cloudinary URL (if available)
+                if cloudinary_url:
+                     print(f"Extracting text from Cloudinary URL: {cloudinary_url}")
+                     ocr_text = extract_text_from_image(cloudinary_url) # Pass URL
+                     results['ocr_text'] = ocr_text if ocr_text else "No text found in image."
+                     print(f"OCR Result: {results['ocr_text'][:100]}...")
+                else:
+                     print("Skipping OCR because Cloudinary upload failed or returned no URL.")
+                     ocr_text = "" # Ensure ocr_text is empty if no URL
+                     results['ocr_text'] = "OCR skipped: Image upload failed."
+
+                # 3. Perform analysis on the extracted text (if any)
+                if ocr_text and len(ocr_text.strip()) >= 10:
+                    print(f"Running Gemini check on OCR text ({len(ocr_text)} chars)...")
+                    # Store Gemini result under a specific key
+                    ocr_analysis_result = check_fact_gemini(ocr_text)
+                    results['ocr_analysis'] = ocr_analysis_result 
+                else:
+                    print("Skipping analysis on OCR text (insufficient text found).")
+                    results['ocr_analysis'] = {
+                        "verification_score": 0.5, 
+                        "confidence": 0.0, 
+                        "results": [], 
+                        "error": "Analysis skipped: Insufficient text found via OCR."
+                    }
+                
+                results['media_type'] = 'image'
+
+            finally:
+                 # 4. Clean up the temporary local image file
+                 if temp_image_path and os.path.exists(temp_image_path):
+                     try:
+                         os.remove(temp_image_path)
+                         print(f"Removed temporary image file: {temp_image_path}")
+                     except OSError as e:
+                         print(f"Warning: Could not remove temporary image file {temp_image_path}: {e}")
+
+        else:
+            return jsonify({"error": "Unknown or unsupported media type for processing."}), 500
+
+    except Exception as processing_error:
+         print(f"Error during media processing: {processing_error}")
+         # Add video/image URL if processing failed mid-way but file exists
+         if uploaded_video_filename:
+             results['video_url'] = f'/uploads/{uploaded_video_filename}'
+         elif media_type == "image" and image_path:
+             results['image_url'] = f'/uploads/{os.path.basename(image_path)}'
+         results['error'] = f"Processing failed: {str(processing_error)}"
+         return jsonify(results), 500
 
     return jsonify(results)
 
