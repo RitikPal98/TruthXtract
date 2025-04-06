@@ -8,6 +8,7 @@ import re
 import requests
 from urllib.parse import urlparse
 import mimetypes
+import shutil # <-- Add import for directory removal
 
 # Using Hachoir for metadata extraction
 from hachoir.parser import createParser
@@ -36,8 +37,11 @@ import numpy as np
 import requests
 
 # For Google Gemini API
-import google.generativeai as genai
-import json
+# import google.generativeai as genai
+# import json
+
+# Import the specific function from the new module
+from .gemini_utils import check_fact_gemini
 
 # Load spaCy model
 nlp = spacy.load('en_core_web_sm')
@@ -54,60 +58,6 @@ cloudinary.config(
     api_secret=os.getenv("CLOUDINARY_API_SECRET"),
     secure=True
 )
-
-# Configure Gemini API
-GEMINI_API_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'projecttx-8c3a581eb089.json')
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # Read from environment first
-
-try:
-    gemini_key_source = None
-    # Initialize Gemini API
-    if GEMINI_API_KEY:
-        # Use API key from environment variable if available
-        genai.configure(api_key=GEMINI_API_KEY)
-        gemini_key_source = "environment variable"
-    else:
-        # Try to load credentials from service account file as a fallback
-        print(f"GEMINI_API_KEY environment variable not set. Trying file: {GEMINI_API_KEY_FILE}")
-        try:
-            # Read the service account JSON file
-            with open(GEMINI_API_KEY_FILE, 'r') as f:
-                creds_data = json.load(f)
-            
-            if 'api_key' in creds_data and creds_data['api_key']:
-                genai.configure(api_key=creds_data['api_key'])
-                gemini_key_source = "service account file"
-            else:
-                print("Service account file exists but does not contain a valid 'api_key' field.")
-        except FileNotFoundError:
-             print(f"Warning: Service account file not found at {GEMINI_API_KEY_FILE}. Cannot configure Gemini from file.")
-        except json.JSONDecodeError:
-             print(f"Error: Failed to parse JSON from service account file: {GEMINI_API_KEY_FILE}")
-        except Exception as file_error:
-            print(f"Error reading service account file: {file_error}")
-
-    # Check if configuration was successful from either source
-    if gemini_key_source:
-        print(f"Gemini API configured successfully using key from: {gemini_key_source}")
-        # Set up model configuration
-        generation_config = {
-            "temperature": 0.2,  # More factual/deterministic outputs
-            "top_p": 0.95,
-            "top_k": 64,
-            "max_output_tokens": 2048,
-        }
-        
-        # Use Gemini Pro as the default model for fact-checking
-        gemini_model = genai.GenerativeModel('gemini-pro', generation_config=generation_config)
-        print("Gemini model initialized successfully (gemini-pro).")
-    else:
-        print("Failed to configure Gemini API key from environment or file. Gemini features will be unavailable.")
-        gemini_model = None # Explicitly set model to None if configuration failed
-
-except Exception as e:
-    print(f"Error during Gemini configuration or model initialization: {e}")
-    gemini_model = None
-
 
 # Configure Hachoir to avoid charset probe warnings if needed
 # HachoirConfig.quiet = True 
@@ -520,138 +470,6 @@ def verify_with_external_sources(text):
         print(f"Error during external verification: {e}")
         return 0.5  # Neutral score on error
 
-def check_fact_gemini(text):
-    """Fact-check statements using Google's Gemini model with source attribution"""
-    if not gemini_model:
-        print("Gemini API not properly configured. Skipping Gemini fact-check.")
-        return {
-            "verification_score": 0.5,  # Neutral
-            "confidence": 0.0,
-            "results": [],
-            "error": "Gemini API not properly configured"
-        }
-    
-    if not text or len(text.strip()) < 10:
-        return {
-            "verification_score": 0.5,  # Neutral
-            "confidence": 0.0,
-            "results": [],
-            "error": "Insufficient text to analyze"
-        }
-    
-    try:
-        print(f"Performing advanced fact-checking with Gemini AI on text ({len(text)} chars)...")
-        
-        # Prepare prompt for fact-checking
-        prompt = f"""You are an expert fact-checker with a specialty in verifying information and providing reliable sources.
-        
-Task: Carefully analyze the following statement and determine if it is REAL or FAKE news.
-
-STATEMENT TO VERIFY: "{text}"
-
-Analysis Instructions:
-- Evaluate the entire statement as a single claim
-- Determine if the news/claim is REAL or FAKE
-- Provide specific evidence supporting your assessment
-- List at least 2 specific, reliable sources that verify or contradict the claim (include names of publications, research papers, or official sources)
-- Include direct URLs to sources where possible
-
-Please format your response as a JSON object with this structure:
-{{
-  "verdict": string, // "REAL" or "FAKE"
-  "confidence": float, // 0.0 to 1.0
-  "evidence": string, // Explanation of your assessment
-  "truth_score": float, // 0.0 (completely false) to 1.0 (completely true)
-  "sources": [
-    {{
-      "name": string, // Name of publication or organization
-      "url": string // Direct link to source
-    }}
-  ]
-}}
-
-Additional guidelines:
-- Express the verdict clearly as either "REAL" or "FAKE"
-- Truth score should be from 0.0 (completely false) to 1.0 (completely true)
-- Provide clear, concise evidence for your assessment
-- Ensure sources are credible (academic, major news outlets, government agencies, etc.)
-- Express confidence level based on quality/quantity of available sources
-
-Your response must ONLY contain the JSON object with no other text."""
-        
-        # Get response from Gemini
-        response = gemini_model.generate_content(prompt)
-        
-        # Process the response
-        try:
-            # Extract JSON content from response
-            content = response.text
-            # Parse the JSON
-            result = json.loads(content)
-            
-            # Structure and format the result
-            verdict = result.get("verdict", "UNKNOWN")
-            truth_score = result.get("truth_score", 0.5)  # Default to neutral
-            confidence = result.get("confidence", 0.3)  # Lower default confidence
-            evidence = result.get("evidence", "")
-            sources = result.get("sources", [])
-            
-            # Format result for display
-            formatted_result = {
-                "claim_text": text[:150] + "..." if len(text) > 150 else text,
-                "truthfulness": truth_score,
-                "verdict": verdict,
-                "evidence": evidence,
-                "sources": sources
-            }
-            
-            print(f"Gemini fact check complete: verdict={verdict}, score={truth_score:.2f}, sources={len(sources)}")
-            
-            return {
-                "verification_score": truth_score,
-                "confidence": confidence,
-                "results": [formatted_result],  # Wrap in list for backward compatibility
-                "error": None
-            }
-            
-        except json.JSONDecodeError as e:
-            print(f"Error parsing Gemini response as JSON: {e}")
-            print(f"Raw response: {response.text}")
-            
-            # Attempt to extract valuable information even if JSON parsing failed
-            default_result = {
-                "claim_text": text[:150] + "..." if len(text) > 150 else text,
-                "truthfulness": 0.5,
-                "verdict": "UNKNOWN",
-                "evidence": "Failed to process through AI verification",
-                "sources": []
-            }
-            
-            return {
-                "verification_score": 0.5,
-                "confidence": 0.1,
-                "results": [default_result],
-                "raw_response": response.text[:1000],  # Include truncated raw response
-                "error": "Failed to parse Gemini response as JSON"
-            }
-    
-    except Exception as e:
-        print(f"Error during Gemini fact check: {e}")
-        default_result = {
-            "claim_text": text[:150] + "..." if len(text) > 150 else text,
-            "truthfulness": 0.5,
-            "verdict": "UNKNOWN",
-            "evidence": "Failed to verify through AI",
-            "sources": []
-        }
-        
-        return {
-            "verification_score": 0.5,  # Neutral score on error
-            "confidence": 0.0,
-            "results": [default_result],
-            "error": f"Gemini fact check failed: {str(e)}"
-        }
-
 def analyze_transcript(transcript, video_metadata=None):
     """Comprehensive analysis of video transcript combining multiple verification methods"""
     if not transcript:
@@ -798,7 +616,7 @@ def extract_text_from_image(image_path):
     try:
         image = Image.open(image_path)
         text = pytesseract.image_to_string(image)
-        print(tex)
+        print(text)
         return text
     except Exception as e:
         print(f"Error extracting text from image: {e}")
