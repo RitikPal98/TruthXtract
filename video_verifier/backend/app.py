@@ -2,6 +2,8 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import uuid
+import requests
+from bs4 import BeautifulSoup
 from utils.video_processing import (
     extract_keyframes, 
     extract_metadata,
@@ -11,7 +13,6 @@ from utils.video_processing import (
     check_fact_google,
     analyze_transcript,
     download_content_from_url,
-    process_media_for_fact_checking,
     check_fact_gemini
 )
 import cloudinary
@@ -53,6 +54,7 @@ def analyze_media():
     fact_check_data = {"claims": [], "error": None}
     media_type = "unknown"
     uploaded_video_filename = None # Store filename if video is uploaded
+    original_url = None # Initialize original_url
 
     # Determine input type and get initial file path
     # -------------------------------------------------
@@ -78,6 +80,7 @@ def analyze_media():
                 media_type = "video"
                 uploaded_video_filename = os.path.basename(video_path) # Mark for serving
                 print(f"Downloaded video from URL: {video_path}")
+                original_url = url # Set original_url
             elif ext in common_image_exts:
                 image_path = downloaded_path
                 media_type = "image"
@@ -108,9 +111,11 @@ def analyze_media():
                 video_path = temp_path
                 media_type = "video"
                 uploaded_video_filename = temp_filename # Store the filename for serving
+                original_url = None # Reset original_url
             elif ext in common_image_exts:
                 image_path = temp_path
                 media_type = "image"
+                original_url = None # Reset original_url
             else:
                  # Clean up unsupported file
                  if os.path.exists(temp_path):
@@ -128,6 +133,7 @@ def analyze_media():
             media_type = "video"
             uploaded_video_filename = temp_filename
             print(f"Video saved to {video_path}")
+            original_url = None # Reset original_url
         elif 'image' in request.files:
             file = request.files['image']
             if file.filename == '': return jsonify({"error": "No selected image"}), 400
@@ -137,6 +143,7 @@ def analyze_media():
             file.save(image_path)
             media_type = "image"
             print(f"Image saved to {image_path}")
+            original_url = None # Reset original_url
         
     except Exception as setup_error:
         print(f"Error during file setup/download: {setup_error}")
@@ -153,6 +160,34 @@ def analyze_media():
             # --- Metadata Extraction ---
             print("Extracting metadata...")
             results['metadata'] = extract_metadata(video_path)
+
+            # --- Attempt to get metadata from original URL (if provided) ---
+            if original_url: # Check if analysis was triggered by URL
+                try:
+                    print(f"Attempting to fetch title from original URL: {original_url}")
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+                    response = requests.get(original_url, headers=headers, timeout=10, allow_redirects=True)
+                    response.raise_for_status() # Raise an exception for bad status codes
+
+                    if 'text/html' in response.headers.get('Content-Type', '').lower():
+                        soup = BeautifulSoup(response.content, 'html.parser')
+                        title_tag = soup.find('title')
+                        if title_tag and title_tag.string:
+                            original_title = title_tag.string.strip()
+                            print(f"Found title from URL: {original_title}")
+                            if isinstance(results.get('metadata'), dict):
+                                results['metadata']['original_url_title'] = original_title
+                            else:
+                                results['metadata'] = {'original_url_title': original_title}
+                        else:
+                            print("Could not find title tag in HTML from original URL.")
+                    else:
+                        print("Original URL content is not HTML, skipping title extraction.")
+
+                except requests.exceptions.RequestException as req_err:
+                    print(f"Error fetching original URL {original_url}: {req_err}")
+                except Exception as html_err:
+                    print(f"Error parsing HTML from {original_url}: {html_err}")
 
             # --- Keyframe Extraction ---
             print("Extracting keyframes...")

@@ -98,9 +98,22 @@ def extract_keyframes(video_path, output_dir=KEYFRAMES_DIR, frames_per_second=1)
         duration = total_frames / fps if fps > 0 else 0
         print(f"Video Info: FPS={fps}, Frames={total_frames}, Duration={duration:.2f}s")
 
-        # Calculate frame interval
-        frame_interval = int(fps / frames_per_second) if frames_per_second > 0 and fps > 0 else int(fps) # Default to 1 frame per sec if calculation fails
-        if frame_interval <= 0: frame_interval = 1 # Ensure at least 1
+        # Calculate frame interval based on duration
+        if fps > 0:
+            if duration < 300: # Less than 5 minutes
+                seconds_per_keyframe = 10
+                frame_interval = int(fps * seconds_per_keyframe)
+                print(f"Video < 5 mins. Extracting keyframe every {seconds_per_keyframe} seconds (interval: {frame_interval} frames)")
+            else: # 5 minutes or longer
+                # Use the default or provided frames_per_second (defaults to 1)
+                frame_interval = int(fps / frames_per_second) 
+                print(f"Video >= 5 mins. Extracting {frames_per_second} frame(s) per second (interval: {frame_interval} frames)")
+        else:
+            frame_interval = 1 # Fallback if fps is 0
+
+        if frame_interval <= 0: 
+            print(f"Warning: Calculated frame_interval ({frame_interval}) was invalid. Setting to 1.")
+            frame_interval = 1 # Ensure at least 1
 
         base_filename = os.path.splitext(os.path.basename(video_path))[0]
         count = 0

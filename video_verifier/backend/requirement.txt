@@ -23,3 +23,7 @@ pytesseract
 pytube
 yt-dlp
 azure-ai-vision-imageanalysis
+beautifulsoup4
+
+# python -m spacy download en_core_web_md
+spacy

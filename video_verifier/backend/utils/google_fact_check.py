@@ -27,7 +27,7 @@ except OSError:
          nlp = None # Disable spaCy features if models are missing
 
 # Similarity Threshold
-SIMILARITY_THRESHOLD = 0.50
+SIMILARITY_THRESHOLD = 0.95
 
 def check_fact_google(query):
     """
