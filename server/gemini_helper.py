@@ -32,28 +32,48 @@ def analyze_content_with_gemini(text, prompt_type="verify"):
     """
     try:
         # Get the appropriate Gemini model
-        model = genai.GenerativeModel('gemini-1.5-pro')
+        if prompt_type == "verify":
+            # Use the more accurate experimental model for verification tasks
+            model = genai.GenerativeModel('gemini-2.5-pro-exp-03-25')
+        else:
+            # Use standard model for other tasks
+            model = genai.GenerativeModel('gemini-1.5-pro')
         
         if prompt_type == "verify":
             prompt = f"""
-            You are a fact-checking expert. Carefully analyze the following news text and determine if it is 
-            likely to be real or fake news. Consider language patterns, source credibility markers, 
-            factual consistency, and journalistic standards.
-            
-            Provide a detailed analysis with:
-            1. A truthfulness score between 0.0 (definitely fake) and 1.0 (definitely real)
-            2. Key findings that support your determination
-            3. Potential biases or misleading elements if any
-            4. A list of factual claims that could be verified
-            
-            Format your response as a JSON object with the following keys:
-            - score: numerical value between 0.0 and 1.0
-            - confidence: your confidence in this assessment (0.0-1.0)
-            - key_findings: list of findings
-            - misleading_elements: list of concerning elements
-            - factual_claims: list of verifiable claims
-            
-            News text: {text}
+            Task: Carefully analyze the following statement and determine if it is REAL or FAKE news.
+
+            STATEMENT TO VERIFY: "{text}"
+
+            Analysis Instructions:
+            - Evaluate the entire statement as a single claim
+            - Determine if the news/claim is REAL or FAKE
+            - Provide specific evidence supporting your assessment
+            - List at least 2 specific, reliable sources that verify or contradict the claim (include names of publications, research papers, or official sources)
+            - Include direct URLs to sources where possible
+
+            Please format your response as a JSON object with this structure:
+            {{
+              "verdict": string, // "REAL" or "FAKE"
+              "confidence": float, // 0.0 to 1.0
+              "evidence": string, // Explanation of your assessment
+              "truth_score": float, // 0.0 (completely false) to 1.0 (completely true)
+              "sources": [
+                {{
+                  "name": string, // Name of publication or organization
+                  "url": string // Direct link to source
+                }}
+              ]
+            }}
+
+            Additional guidelines:
+            - Express the verdict clearly as either "REAL" or "FAKE"
+            - Truth score should be from 0.0 (completely false) to 1.0 (completely true)
+            - Provide clear, concise evidence for your assessment
+            - Ensure sources are credible (academic, major news outlets, government agencies, etc.)
+            - Express confidence level based on quality/quantity of available sources
+
+            Your response must ONLY contain the JSON object with no other text.
             """
         elif prompt_type == "classify":
             prompt = f"""

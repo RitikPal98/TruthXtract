@@ -14,6 +14,7 @@ from gemini_helper import analyze_content_with_gemini
 import concurrent.futures
 from functools import lru_cache
 import threading
+import time  # Import time for cache TTL check
 
 app = Flask(__name__)
 CORS(app)
@@ -32,33 +33,63 @@ MODEL_NAME = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
 
-# Cache for news articles
+# Cache for news articles and analysis results
 NEWS_CACHE = {
     'data': [],
     'last_updated': None,
     'lock': threading.Lock()
 }
+ANALYSIS_CACHE = {} # Simple in-memory cache for analysis results
+ANALYSIS_CACHE_LOCK = threading.Lock()
+CACHE_TTL = 3600 # Cache analysis results for 1 hour
 
 # Google Fact Check API
 FACT_CHECK_API = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
 
+# Ensure this key is set in your .env file or environment variables
 GOOGLE_API_KEY = os.getenv('GOOGLE_FACT_CHECK_API_KEY')
 
 def check_with_fact_checking_sites(text):
-    """Check against fact-checking websites"""
+    """Check against Google Fact Check API"""
+    if not GOOGLE_API_KEY:
+        print("Warning: GOOGLE_FACT_CHECK_API_KEY not set. Skipping fact check.")
+        return False, []
+        
     try:
-        # Google Fact Check API
+        # Use only the first ~500 characters for better matching and API limits
+        query_text = text[:500]
+        
         params = {
             'key': GOOGLE_API_KEY,
-            'query': text[:200]  # First 200 chars for relevant matches
+            'query': query_text,
+            'languageCode': 'en' # Specify language
         }
-        response = requests.get(FACT_CHECK_API, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if 'claims' in data:
-                return True, data['claims']
+        response = requests.get(FACT_CHECK_API, params=params, timeout=10) # Add timeout
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+        data = response.json()
+        if 'claims' in data and data['claims']:
+            # Return structured claims if found
+            claims_structured = []
+            for claim in data['claims']:
+                if claim.get('claimReview'):
+                    review = claim['claimReview'][0] # Get the first review
+                    claims_structured.append({
+                        'text': claim.get('text'),
+                        'claimant': claim.get('claimant'),
+                        'claimDate': claim.get('claimDate'),
+                        'publisher': review.get('publisher', {}).get('name'),
+                        'url': review.get('url'),
+                        'title': review.get('title'),
+                        'reviewRating': review.get('textualRating')
+                    })
+            return True, claims_structured[:5] # Limit to 5 claims
         return False, []
-    except:
+    except requests.exceptions.RequestException as e:
+        print(f"Error calling Google Fact Check API: {str(e)}")
+        return False, []
+    except Exception as e:
+        print(f"Error processing Fact Check results: {str(e)}")
         return False, []
 
 def analyze_with_model(text):
@@ -198,84 +229,176 @@ def analyze_with_model_cached(text):
 
 @lru_cache(maxsize=100)
 def check_with_fact_checking_sites_cached(text_prefix):
-    """Cached version of fact checking"""
+    """Cached version of fact checking using only a prefix"""
     return check_with_fact_checking_sites(text_prefix)
 
+@lru_cache(maxsize=50) # Cache Gemini results
+def analyze_content_with_gemini_cached(text, prompt_type="verify"):
+    """Cached version of Gemini analysis"""
+    return analyze_content_with_gemini(text, prompt_type)
+
 def analyze_text(text, source="", url=""):
-    """Enhanced analysis function with Gemini AI integration"""
+    """Enhanced analysis function with Gemini AI integration and Fact Check"""
+    # Check cache first
+    cache_key = text[:1000] # Use a prefix of the text as cache key
+    with ANALYSIS_CACHE_LOCK:
+        cached_result = ANALYSIS_CACHE.get(cache_key)
+        if cached_result and (time.time() - cached_result['timestamp']) < CACHE_TTL:
+            print(f"Returning cached analysis for: {cache_key[:50]}...")
+            return cached_result['data']
+
     try:
-        # First, check if this is a basic, well-known fact
+        # 1. Basic Fact Check
         is_basic_fact, fact_verdict = check_if_basic_fact(text)
         if is_basic_fact:
-            # For basic facts, return a high confidence score
-            return fact_verdict, 0.95, {
+            analysis_result = fact_verdict, 0.95, {
                 'model_score': fact_verdict,
+                'gemini_score': fact_verdict,
                 'fact_check_score': fact_verdict,
-                'verification_score': fact_verdict,
-                'source_credibility': 0.9,
-                'is_basic_fact': True
+                'verification_score': fact_verdict, # Assume high verification for basic facts
+                'source_credibility': 0.8, # Assume decent source if stating basic fact
+                'is_basic_fact': True,
+                'claims_found': 0,
+                'factual_claims': [],
+                'key_findings': ["Identified as a basic factual statement."],
+                'misleading_elements': []
             }
+            # Store in cache before returning
+            with ANALYSIS_CACHE_LOCK:
+                ANALYSIS_CACHE[cache_key] = {'timestamp': time.time(), 'data': analysis_result}
+            return analysis_result
+
+        # Run analyses in parallel for speed
+        final_score = 0.5
+        confidence = 0.3
+        analysis_details = {}
+        gemini_insights = {}
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            # 2. Submit Gemini Analysis
+            future_gemini = executor.submit(analyze_content_with_gemini_cached, text, "verify")
             
-        # Get Gemini analysis
-        gemini_results = analyze_content_with_gemini(text, "verify")
-        gemini_score = gemini_results.get('score', 0.5)
-        gemini_confidence = gemini_results.get('confidence', 0.6)
-        
-        # 1. Traditional Model Prediction
-        model_scores = analyze_with_model_cached(text)
-        traditional_score = model_scores[1]  # Assuming index 1 is for real news
-        
-        # 2. Fact Checking - use only first 200 chars for caching
-        text_prefix = text[:200]
-        fact_checked, claims = check_with_fact_checking_sites_cached(text_prefix)
-        fact_check_score = 0.8 if fact_checked else 0.5
-        
-        # 3. External Verification
-        verification_score = verify_with_external_sources(text)
-        
-        # 4. Source Credibility Check
-        source_lower = source.lower()
-        source_credibility = RELIABLE_SOURCES.get(source_lower, 0.5)
-        
-        # Combine all signals with appropriate weightings
-        # Give Gemini a significant weight due to its advanced capabilities
+            # 3. Submit Traditional Model Analysis
+            future_model = executor.submit(analyze_with_model_cached, text)
+            
+            # 4. Submit Fact Checking (use prefix for caching)
+            text_prefix = text[:500] # Use consistent prefix length
+            future_fact_check = executor.submit(check_with_fact_checking_sites_cached, text_prefix)
+
+            # --- Retrieve results ---
+            # Gemini Results
+            try:
+                gemini_results = future_gemini.result()
+                # --- New structure parsing ---
+                gemini_verdict = gemini_results.get('verdict', 'UNCLEAR')
+                # Use truth_score as the primary Gemini score indicator
+                gemini_score = float(gemini_results.get('truth_score', 0.5))
+                gemini_confidence = float(gemini_results.get('confidence', 0.3))
+                gemini_evidence = gemini_results.get('evidence', 'No specific evidence provided by AI.')
+                gemini_sources = gemini_results.get('sources', [])
+                # ------------------------------
+                if gemini_results.get("error"):
+                     print(f"Gemini analysis warning: {gemini_results.get('error')}")
+                     # Use default scores if Gemini errored
+                     gemini_score = 0.5
+                     gemini_confidence = 0.3
+                     gemini_evidence = f"AI analysis failed: {gemini_results.get('error')}"
+                     gemini_sources = []
+            except Exception as e:
+                print(f"Error retrieving Gemini result: {str(e)}")
+                gemini_score = 0.5
+                gemini_confidence = 0.3
+                gemini_evidence = "Error during AI analysis."
+                gemini_sources = []
+
+            # Traditional Model Results
+            try:
+                model_scores = future_model.result()
+                # Ensure model_scores is a list/tuple of at least 2 floats
+                if isinstance(model_scores, (list, tuple)) and len(model_scores) >= 2 and all(isinstance(s, float) for s in model_scores):
+                     traditional_score = model_scores[1] # Assuming index 1 is 'real'
+                else:
+                     print(f"Warning: Unexpected format from analyze_with_model: {model_scores}. Using default.")
+                     traditional_score = 0.5
+            except Exception as e:
+                print(f"Error retrieving traditional model result: {str(e)}")
+                traditional_score = 0.5
+
+            # Fact Checking Results
+            try:
+                fact_checked, claims = future_fact_check.result()
+                 # Score based on whether *any* relevant claims were found and reviewed
+                fact_check_score = 0.8 if fact_checked and claims else 0.3 if fact_checked else 0.5
+                claims_found = len(claims) if claims else 0
+            except Exception as e:
+                print(f"Error retrieving fact check result: {str(e)}")
+                fact_check_score = 0.5
+                claims = []
+                claims_found = 0
+
+        # 5. Source Credibility Check (can run sequentially, usually fast)
+        source_lower = source.lower() if source else ""
+        # Normalize source names slightly (e.g., remove " News")
+        normalized_source = source_lower.replace(" news", "").replace(" times", "").strip()
+        source_credibility = RELIABLE_SOURCES.get(normalized_source, 0.5) # Check normalized
+
+        # 6. External Verification (Optional, keep simple for now)
+        # verification_score = verify_with_external_sources(text) # This seems less reliable/maintained, maybe disable or simplify
+        verification_score = 0.5 # Defaulting this for now
+
+        # Combine signals with revised weightings (Total = 1.0)
+        # Increased weight for Gemini and Fact Check
         final_score = (
-            gemini_score * 0.4 +            # Gemini analysis (40%)
-            traditional_score * 0.2 +       # Traditional ML model (20%)
-            fact_check_score * 0.2 +        # Fact checking (20%)
-            verification_score * 0.1 +      # External verification (10%)
-            source_credibility * 0.1        # Source credibility (10%)
+            gemini_score * 0.45 +           # Gemini analysis (45%)
+            traditional_score * 0.15 +      # Traditional ML model (15%)
+            fact_check_score * 0.25 +       # Fact checking (25%)
+            # verification_score * 0.05 +     # External verification (5%) - De-emphasized
+            source_credibility * 0.15       # Source credibility (15%)
         )
         
-        # Calculate confidence based on agreement between different methods
-        scores = [gemini_score, traditional_score, fact_check_score, verification_score, source_credibility]
-        confidence = max(gemini_confidence, 1 - np.std(scores))
-        
-        # Extract factual claims from Gemini
-        factual_claims = gemini_results.get('factual_claims', [])
-        
-        # Extract key findings to include in analysis
-        key_findings = gemini_results.get('key_findings', [])
-        
-        # Extract misleading elements if any
-        misleading_elements = gemini_results.get('misleading_elements', [])
-        
-        return final_score, confidence, {
+        # Calculate confidence: Higher if scores agree, penalize disagreement. Use Gemini confidence as a base.
+        scores = [gemini_score, traditional_score, fact_check_score, source_credibility]
+        score_std_dev = np.std(scores)
+        # Confidence starts with Gemini's confidence, reduced by score disagreement
+        confidence = max(0.1, min(1.0, gemini_confidence * (1 - score_std_dev * 0.5)))
+
+
+        analysis_details = {
             'model_score': float(traditional_score),
             'gemini_score': float(gemini_score),
             'fact_check_score': float(fact_check_score),
             'verification_score': float(verification_score),
             'source_credibility': float(source_credibility),
-            'claims_found': len(claims) if claims else 0,
-            'factual_claims': factual_claims,
-            'key_findings': key_findings,
-            'misleading_elements': misleading_elements,
-            'is_basic_fact': False
+            'claims_found': claims_found,
+            'is_basic_fact': False,
+            # Store new Gemini fields
+            'gemini_verdict': gemini_verdict,
+            'gemini_evidence': gemini_evidence,
+            'gemini_sources': gemini_sources
+            # 'key_findings', 'misleading_elements', 'factual_claims' are replaced by 'gemini_evidence'
         }
+
+        analysis_result = final_score, confidence, analysis_details
         
+        # Store in cache before returning
+        with ANALYSIS_CACHE_LOCK:
+            ANALYSIS_CACHE[cache_key] = {'timestamp': time.time(), 'data': analysis_result}
+            
+        return analysis_result
+
     except Exception as e:
-        print(f"Analysis error: {str(e)}")
-        return 0.5, 0.3, {}
+        print(f"Major analysis error in analyze_text: {str(e)}")
+        # Return default structure on major error
+        return 0.5, 0.3, {
+            'model_score': 0.5, 'gemini_score': 0.5, 'fact_check_score': 0.5,
+            'verification_score': 0.5, 'source_credibility': 0.5, 'claims_found': 0,
+            'is_basic_fact': False, 'key_findings': [], 'misleading_elements': [],
+            'factual_claims': [], 'error': f"Analysis failed: {str(e)}",
+            # Add default new fields on error
+            'gemini_verdict': 'ERROR',
+            'gemini_evidence': f"Analysis failed: {str(e)}",
+            'gemini_sources': []
+        }
 
 # Update the RELIABLE_SOURCES dictionary to include Indian sources
 RELIABLE_SOURCES = {
@@ -677,93 +800,80 @@ def predict():
         if not text:
             return jsonify({'status': 'error', 'error': 'No text provided'})
 
-        # Get model prediction
-        model_scores = analyze_with_model_cached(text)
-        is_real = model_scores[1] > model_scores[0]
-        confidence = max(model_scores)
-
-        # Check if it's a basic fact
-        is_basic_fact, basic_fact_score = check_if_basic_fact(text)
+        # Use the enhanced analyze_text function
+        final_score, confidence, analysis_details = analyze_text(text)
         
-        # Get fact checking results
+        # Determine verdict based on the combined score
+        is_real = final_score > 0.55 # Use a slightly higher threshold for 'real'
+        
+        # Get fact checking claims (already retrieved within analyze_text if cached, otherwise re-fetch - consider optimizing)
+        # For simplicity, let's rely on the cached check for now or re-run the non-cached version
         fact_check_success, fact_check_claims = check_with_fact_checking_sites(text)
-        
-        # Search for related articles using NewsAPI
+
+        # Search for related articles using NewsAPI (Keep this part)
+        similar_articles = []
         try:
-            # Extract key phrases from text (first 100 chars for relevance)
             search_query = text[:100]
-            articles = newsapi.get_everything(
+            articles_response = newsapi.get_everything(
                 q=search_query,
                 language='en',
                 sort_by='relevancy',
-                page_size=5
+                page_size=5 # Fetch 5 relevant articles
             )
-            
-            similar_articles = []
-            if articles['status'] == 'ok':
-                similar_articles = articles['articles']
+            if articles_response['status'] == 'ok':
+                similar_articles = articles_response.get('articles', [])
         except Exception as e:
-            print(f"NewsAPI error: {str(e)}")
-            similar_articles = []
+            print(f"NewsAPI error during prediction: {str(e)}")
+            # Continue without similar articles if NewsAPI fails
 
-        # Get verification from external sources
-        verification_score = verify_with_external_sources(text)
-        
-        # Get Gemini insights if available
-        try:
-            gemini_insights = analyze_content_with_gemini(text)
-            gemini_score = gemini_insights.get('confidence', None)
-        except Exception as e:
-            print(f"Gemini analysis error: {str(e)}")
-            gemini_insights = None
-            gemini_score = None
-
-        # Prepare verification sources
+        # Prepare verification sources list (static list is fine)
         verification_sources = [
-            "Associated Press",
-            "Reuters Fact Check",
-            "Snopes",
-            "FactCheck.org",
-            "PolitiFact"
+            "Associated Press", "Reuters", "Snopes", "FactCheck.org",
+            "PolitiFact", "AFP Fact Check", "Google Fact Check Explorer"
         ]
 
-        # Calculate final scores
-        fact_check_score = len(fact_check_claims) / 5 if fact_check_claims else 0.5
-        source_credibility = 0.7  # Default credibility score
-
-        # Prepare response
-        response = {
+        # Structure the response
+        response_data = {
             'status': 'success',
             'isReal': is_real,
-            'confidence': confidence,
-            'analysis': {
-                'model_score': model_scores[1],  # Score for real class
-                'fact_check_score': fact_check_score,
-                'verification_score': verification_score,
-                'source_credibility': source_credibility,
-                'is_basic_fact': is_basic_fact,
-                'gemini_score': gemini_score
-            },
+            'confidence': float(confidence), # Ensure float
+            'score': float(final_score),     # Include the raw score
+            'analysis': analysis_details, # Contains scores breakdown and insights
             'references': {
-                'fact_check_claims': fact_check_claims,
+                'fact_check_claims': fact_check_claims, # Results from Google Fact Check API
                 'similar_articles': similar_articles,
                 'verification_sources': verification_sources
             }
         }
+        
+        # If analysis failed internally, report that
+        if 'error' in analysis_details:
+             response_data['status'] = 'error'
+             response_data['error'] = analysis_details['error']
 
-        if gemini_insights:
-            response['insights'] = gemini_insights
 
-        return jsonify(response)
+        return jsonify(response_data)
 
     except Exception as e:
         print(f"Error in predict endpoint: {str(e)}")
+        # Log the full traceback for debugging
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'status': 'error',
-            'error': 'Error analyzing text',
+            'error': 'An unexpected error occurred during analysis.',
             'details': str(e)
-        })
+        }), 500
 
 if __name__ == '__main__':
+    # Make sure GOOGLE_API_KEY is loaded if using .env
+    from dotenv import load_dotenv
+    load_dotenv()
+    GOOGLE_API_KEY = os.getenv('GOOGLE_FACT_CHECK_API_KEY') # Reload after load_dotenv
+    if not GOOGLE_API_KEY:
+        print("\n*** WARNING: GOOGLE_FACT_CHECK_API_KEY is not set in environment variables or .env file. Fact checking will be skipped. ***\n")
+    
+    # Start cache cleanup thread if needed (optional)
+
     app.run(debug=True, port=5000)
 
