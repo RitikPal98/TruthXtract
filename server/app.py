@@ -672,62 +672,96 @@ def create_mock_news_data(count=10):
 def predict():
     try:
         data = request.get_json()
-        text = data.get('newsText')
+        text = data.get('newsText', '')
         
         if not text:
-            return jsonify({
-                'status': 'error',
-                'error': 'No news text provided'
-            })
+            return jsonify({'status': 'error', 'error': 'No text provided'})
 
-        # Get enhanced analysis results with Gemini
-        final_score, confidence, analysis = analyze_text(text)
+        # Get model prediction
+        model_scores = analyze_with_model_cached(text)
+        is_real = model_scores[1] > model_scores[0]
+        confidence = max(model_scores)
+
+        # Check if it's a basic fact
+        is_basic_fact, basic_fact_score = check_if_basic_fact(text)
         
-        # Get fact-checking references
-        fact_checked, claims = check_with_fact_checking_sites(text)
+        # Get fact checking results
+        fact_check_success, fact_check_claims = check_with_fact_checking_sites(text)
         
-        # Search for similar news in reliable sources
-        similar_news = newsapi.get_everything(
-            q=text[:100],  # Use first 100 chars as search query
-            language='en',
-            sort_by='relevancy',
-            page_size=3
-        )
-        
-        # Add Gemini-specific insights
-        gemini_insights = {
-            'key_findings': analysis.get('key_findings', []),
-            'misleading_elements': analysis.get('misleading_elements', []),
-            'factual_claims': analysis.get('factual_claims', []),
-        }
-        
-        return jsonify({
-            'status': 'success',
-            'isReal': final_score > 0.5,
-            'confidence': float(confidence),
-            'score': float(final_score),
-            'analysis': {
-                'model_score': float(analysis.get('model_score', 0)),
-                'gemini_score': float(analysis.get('gemini_score', 0)),
-                'fact_check_score': float(analysis.get('fact_check_score', 0)),
-                'verification_score': float(analysis.get('verification_score', 0)),
-                'source_credibility': float(analysis.get('source_credibility', 0)),
-                'claims_found': analysis.get('claims_found', 0),
-                'is_basic_fact': analysis.get('is_basic_fact', False)
-            },
-            'insights': gemini_insights,
-            'references': {
-                'fact_check_claims': claims,
-                'similar_articles': similar_news.get('articles', []),
-                'verification_sources': list(RELIABLE_SOURCES.keys())
-            }
-        })
+        # Search for related articles using NewsAPI
+        try:
+            # Extract key phrases from text (first 100 chars for relevance)
+            search_query = text[:100]
+            articles = newsapi.get_everything(
+                q=search_query,
+                language='en',
+                sort_by='relevancy',
+                page_size=5
+            )
             
+            similar_articles = []
+            if articles['status'] == 'ok':
+                similar_articles = articles['articles']
+        except Exception as e:
+            print(f"NewsAPI error: {str(e)}")
+            similar_articles = []
+
+        # Get verification from external sources
+        verification_score = verify_with_external_sources(text)
+        
+        # Get Gemini insights if available
+        try:
+            gemini_insights = analyze_content_with_gemini(text)
+            gemini_score = gemini_insights.get('confidence', None)
+        except Exception as e:
+            print(f"Gemini analysis error: {str(e)}")
+            gemini_insights = None
+            gemini_score = None
+
+        # Prepare verification sources
+        verification_sources = [
+            "Associated Press",
+            "Reuters Fact Check",
+            "Snopes",
+            "FactCheck.org",
+            "PolitiFact"
+        ]
+
+        # Calculate final scores
+        fact_check_score = len(fact_check_claims) / 5 if fact_check_claims else 0.5
+        source_credibility = 0.7  # Default credibility score
+
+        # Prepare response
+        response = {
+            'status': 'success',
+            'isReal': is_real,
+            'confidence': confidence,
+            'analysis': {
+                'model_score': model_scores[1],  # Score for real class
+                'fact_check_score': fact_check_score,
+                'verification_score': verification_score,
+                'source_credibility': source_credibility,
+                'is_basic_fact': is_basic_fact,
+                'gemini_score': gemini_score
+            },
+            'references': {
+                'fact_check_claims': fact_check_claims,
+                'similar_articles': similar_articles,
+                'verification_sources': verification_sources
+            }
+        }
+
+        if gemini_insights:
+            response['insights'] = gemini_insights
+
+        return jsonify(response)
+
     except Exception as e:
-        print(f"Error in predict: {str(e)}")
+        print(f"Error in predict endpoint: {str(e)}")
         return jsonify({
             'status': 'error',
-            'error': 'Failed to analyze news'
+            'error': 'Error analyzing text',
+            'details': str(e)
         })
 
 if __name__ == '__main__':

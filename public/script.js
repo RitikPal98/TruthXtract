@@ -101,8 +101,12 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       // Show loading state
       verifyBtn.disabled = true;
-      resultDiv.innerHTML =
-        '<div class="loading-spinner">Analyzing news...</div>';
+      resultDiv.innerHTML = `
+        <div class="loading-container">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Analyzing news content...</div>
+        </div>
+      `;
 
       const response = await fetch("http://localhost:5000/predict", {
         method: "POST",
@@ -120,6 +124,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (result.status === "error") {
         throw new Error(result.error);
       }
+
+      // Store the news text for context matching
+      result.userInput = newsText;
 
       displayResult(result);
     } catch (error) {
@@ -330,7 +337,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="report-section" id="evidence-section">
             <h3>Supporting Evidence</h3>
             <div class="evidence-container">
-              ${renderEnhancedEvidence(result, isBasicFact)}
+              ${renderEnhancedEvidence(result)}
             </div>
           </div>
           
@@ -338,7 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="report-section" id="sources-section">
             <h3>Sources & References</h3>
             <div class="sources-container">
-              ${renderSourcesInfo(result, isBasicFact)}
+              ${renderSourcesInfo(result)}
             </div>
           </div>
         </div>
@@ -511,33 +518,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Show loading state with spinner
   function showLoadingState(message) {
     const loadingDiv = document.createElement("div");
-    loadingDiv.className = "gallery-loading";
-
-    // Create shimmer effect container
-    const shimmerContainer = document.createElement("div");
-    shimmerContainer.className = "shimmer-container";
-
-    // Create spinner
-    const spinner = document.createElement("div");
-    spinner.className = "loading-spinner";
-
-    // Create message with animation
-    const messageEl = document.createElement("p");
-    messageEl.className = "loading-message";
-    messageEl.textContent = message || "Loading latest news...";
-
-    // Create progress indicator
-    const progressTextEl = document.createElement("div");
-    progressTextEl.className = "progress-text";
-    progressTextEl.innerHTML = "Analyzing news sources";
-
-    // Add dot animation to progress text
-    animateDots(progressTextEl);
-
-    // Assemble the loading state
-    loadingDiv.appendChild(spinner);
-    loadingDiv.appendChild(messageEl);
-    loadingDiv.appendChild(progressTextEl);
+    loadingDiv.className = "loading-container";
+    loadingDiv.innerHTML = `
+        <div class="loading-spinner"></div>
+        <div class="loading-text">${message || "Loading latest news..."}</div>
+        <div class="progress-text">Analyzing news sources</div>
+    `;
 
     // Clear and add to news gallery
     newsGallery.innerHTML = "";
@@ -545,7 +531,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Show tips after a short delay
     setTimeout(() => {
-      if (document.querySelector(".gallery-loading")) {
+      if (document.querySelector(".loading-container")) {
         const tipEl = document.createElement("div");
         tipEl.className = "loading-tip";
         tipEl.innerHTML = getRandomTip();
@@ -767,8 +753,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Render enhanced evidence with context matching
-  function renderEnhancedEvidence(references, userInput) {
-    if (!references) return "<p>No evidence found related to this content.</p>";
+  function renderEnhancedEvidence(result) {
+    if (!result || !result.references) {
+      return "<p>No evidence found related to this content.</p>";
+    }
+
+    const references = result.references;
+    const userInput = result.userInput;
 
     // Extract key phrases from user input
     const userKeywords = extractKeywords(userInput);
@@ -787,10 +778,8 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
 
       references.fact_check_claims.forEach((claim) => {
-        const relevance = calculateRelevance(
-          claim.title + (claim.text || ""),
-          userKeywords
-        );
+        const claimText = claim.text || claim.title || "";
+        const relevance = calculateRelevance(claimText, userKeywords);
         const relevanceClass =
           relevance > 0.7
             ? "high-relevance"
@@ -801,21 +790,23 @@ document.addEventListener("DOMContentLoaded", () => {
         html += `
           <div class="evidence-item ${relevanceClass}">
             <div class="evidence-header">
-              <h5>${claim.title}</h5>
-              <span class="relevance-badge">${
-                relevance > 0.7
-                  ? "Highly Relevant"
-                  : relevance > 0.4
-                  ? "Relevant"
-                  : "Somewhat Relevant"
-              }</span>
+              <h5>${claim.title || "Fact Check"}</h5>
+              <span class="relevance-badge">
+                ${
+                  relevance > 0.7
+                    ? "Highly Relevant"
+                    : relevance > 0.4
+                    ? "Relevant"
+                    : "Somewhat Relevant"
+                }
+              </span>
             </div>
             <div class="evidence-body">
               <p>${claim.text || "No detailed information available."}</p>
               <div class="evidence-meta">
                 ${
                   claim.publisher
-                    ? `<span class="evidence-source">Source: ${claim.publisher.name}</span>`
+                    ? `<span class="evidence-source">Source: ${claim.publisher}</span>`
                     : ""
                 }
                 ${
@@ -826,9 +817,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     : ""
                 }
               </div>
-              <a href="${
+              ${
                 claim.url
-              }" target="_blank" class="evidence-link">View Full Fact Check</a>
+                  ? `<a href="${claim.url}" target="_blank" class="evidence-link">View Full Fact Check</a>`
+                  : ""
+              }
             </div>
           </div>
         `;
@@ -844,12 +837,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (references.similar_articles && references.similar_articles.length > 0) {
       html += `
         <div class="evidence-section">
-          <h4>Similar News Articles</h4>
+          <h4>Related News Articles</h4>
           <div class="evidence-items">
       `;
 
       references.similar_articles.forEach((article) => {
-        const articleText = article.title + " " + (article.description || "");
+        const articleText = `${article.title} ${article.description || ""}`;
         const relevance = calculateRelevance(articleText, userKeywords);
         const relevanceClass =
           relevance > 0.7
@@ -862,13 +855,15 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="evidence-item ${relevanceClass}">
             <div class="evidence-header">
               <h5>${article.title}</h5>
-              <span class="relevance-badge">${
-                relevance > 0.7
-                  ? "Highly Relevant"
-                  : relevance > 0.4
-                  ? "Relevant"
-                  : "Somewhat Relevant"
-              }</span>
+              <span class="relevance-badge">
+                ${
+                  relevance > 0.7
+                    ? "Highly Relevant"
+                    : relevance > 0.4
+                    ? "Relevant"
+                    : "Somewhat Relevant"
+                }
+              </span>
             </div>
             <div class="evidence-body">
               ${
@@ -879,7 +874,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <p>${article.description || "No description available."}</p>
               <div class="evidence-meta">
                 ${
-                  article.source
+                  article.source?.name
                     ? `<span class="evidence-source">Source: ${article.source.name}</span>`
                     : ""
                 }
@@ -910,46 +905,47 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Render sources information
-  function renderSourcesInfo(references) {
-    if (!references || !references.verification_sources) {
+  function renderSourcesInfo(result) {
+    if (
+      !result ||
+      !result.references ||
+      !result.references.verification_sources
+    ) {
       return "<p>No source information available.</p>";
     }
 
-    const sources = references.verification_sources;
+    const sources = result.references.verification_sources;
     let html = `
       <div class="sources-overview">
-        <h4>Reliable Sources Used for Verification</h4>
-        <p>The analysis is based on data from ${sources.length} trusted news sources and fact-checking organizations.</p>
+        <h4>Verification Sources</h4>
+        <p>Analysis based on data from ${sources.length} trusted news sources and fact-checking organizations.</p>
         
         <div class="sources-grid">
     `;
 
     // Group sources by category
     const categories = {
-      mainstream: [],
       "fact-checkers": [],
+      "news-agencies": [],
       international: [],
       specialized: [],
     };
 
-    // Sort sources into categories (mockup categorization)
+    // Sort sources into categories
     sources.forEach((source) => {
       if (
-        source.includes("fact") ||
-        source.includes("check") ||
-        source.includes("truth")
+        source.toLowerCase().includes("fact") ||
+        source.toLowerCase().includes("check")
       ) {
         categories["fact-checkers"].push(source);
       } else if (
-        source.includes("times") ||
-        source.includes("post") ||
-        source.includes("news")
+        source.toLowerCase().includes("associated press") ||
+        source.toLowerCase().includes("reuters")
       ) {
-        categories["mainstream"].push(source);
+        categories["news-agencies"].push(source);
       } else if (
-        source.includes("bbc") ||
-        source.includes("reuters") ||
-        source.includes("associated")
+        source.toLowerCase().includes("bbc") ||
+        source.toLowerCase().includes("international")
       ) {
         categories["international"].push(source);
       } else {
@@ -958,13 +954,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Render each category
-    Object.keys(categories).forEach((category) => {
-      if (categories[category].length > 0) {
+    Object.entries(categories).forEach(([category, categorySources]) => {
+      if (categorySources.length > 0) {
         html += `
           <div class="source-category">
-            <h5>${category.charAt(0).toUpperCase() + category.slice(1)}</h5>
+            <h5>${category
+              .split("-")
+              .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(" ")}</h5>
             <div class="source-tags">
-              ${categories[category]
+              ${categorySources
                 .map(
                   (source) => `
                 <div class="source-tag">${source}</div>
