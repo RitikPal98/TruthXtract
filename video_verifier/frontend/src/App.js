@@ -595,26 +595,44 @@ function App() {
             )}
 
             {/* Unified Fact Checking Analysis Section */}
-            {(analysisResult.ocr_analysis || analysisResult.transcript_analysis) && (
+            {/* Render if either ocr_analysis (image) or transcript_analysis (video) exists */}
+            {(analysisResult.ocr_analysis || analysisResult.transcript_analysis) && ( 
               <div className={`p-4 rounded-lg border mb-10 ${darkMode ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                 <h3 className={`text-2xl font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Fact-Checking Analysis</h3>
                 
                 {(() => {
-                   // Determine the correct analysis object based on media type
-                  const analysisData = analysisResult.media_type === 'image' 
-                                        ? analysisResult.ocr_analysis 
-                                        : analysisResult.transcript_analysis;
+                   // Determine the correct top-level analysis object based on media type
+                   const analysisData = analysisResult.media_type === 'image' 
+                                         ? analysisResult.ocr_analysis 
+                                         : analysisResult.transcript_analysis;
                    
                    // Exit early if no relevant analysis data
                    if (!analysisData) return <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Fact-checking data not available.</p>;
                    
+                   // --- Data Access - Handles Both Formats ---
+                   // Get score/confidence (directly from analysisData for both formats based on examples)
                    const verificationScore = analysisData.verification_score;
                    const confidence = analysisData.confidence;
-                   const analysisDetails = analysisData.analysis; // Nested details object
+
+                   // Get nested analysis details (Expected for video, might exist in image)
+                   const analysisDetails = analysisData.analysis; 
+
+                   // Get claims array: check analysis.claims (video) OR results (image)
+                   const claims = analysisDetails?.claims || analysisData.results || []; 
+
+                   // Check for errors
+                   const error = analysisData.error || analysisDetails?.error; 
+
+                   // Handle case where analysis data exists but is essentially empty or errored
+                   if (!verificationScore && !claims.length && error) {
+                        return <p className={`text-lg italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Analysis encountered an error: {error}</p>;
+                   }
+                   // --- End Data Access ---
+
 
                   return (
                     <>
-                        {/* Verification Score */}
+                        {/* Verification Score - Should work for both formats */}
                         <div className="mb-4">
                           <h4 className={`text-xl font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Verification Score</h4>
                           {typeof verificationScore === 'number' ? (
@@ -634,8 +652,9 @@ function App() {
                                   <strong>Score:</strong> {`${(verificationScore * 100).toFixed(1)}%`}
                                   {typeof confidence === 'number' && (
                                     <span className={`ml-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                      <strong>Confidence:</strong> {(confidence * 100).toFixed(1)}%
-                            </span>
+                                      {/* Handle potential numpy float by checking existence before formatting */}
+                                      <strong>Confidence:</strong> {(confidence * 100).toFixed(1)}% 
+                                    </span>
                                   )}
                                 </p>
                               </>
@@ -644,8 +663,8 @@ function App() {
                           )}
                         </div>
 
-                        {/* Analysis Details */}
-                        {analysisDetails && (
+                        {/* Analysis Details - Render ONLY if nested analysisDetails object exists (likely only for video) */}
+                        {analysisDetails && ( 
                           <div className="mt-4">
                             <h4 className={`text-xl font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Analysis Details</h4>
                             
@@ -662,10 +681,11 @@ function App() {
                                 <p>
                                   <span className="font-bold">⚠ Analysis Error:</span> {analysisDetails.error}
                                 </p>
-              </div>
-            )}
+                              </div>
+                            )}
             
-                            {!analysisDetails.is_basic_fact && !analysisDetails.error && (
+                            {/* Verification Methods Used - Render only if nested structure exists and no error/basic fact */}
+                            {!analysisDetails.is_basic_fact && !analysisDetails.error && ( 
                               <div className="mt-2">
                                 <div className="flex items-center mb-3">
                                   <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-green-100">
@@ -677,71 +697,83 @@ function App() {
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                  {/* Model Analysis Card - Always show structure if analysisDetails exists */}
-                                  <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-green-50 border-green-100'}`}>
-                                    <div className="flex items-center mb-1">
-                                      <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Model Analysis</p>
-                                      <span className="ml-auto text-xl bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Primary</span>
-                                    </div>
-                                    {typeof analysisDetails.gemini_score === 'number' ? (
-                                       analysisDetails.gemini_claims?.[0]?.verdict ? (
-                                         <div>
-                                           <p className={`text-xl font-bold ${analysisDetails.gemini_claims[0].verdict === "REAL" ? "text-green-600" : "text-red-600"}`}>
-                                             {analysisDetails.gemini_claims[0].verdict}
-                                           </p>
-                                           <div className="flex items-center mt-1">
-                                             <span className={`text-xl mr-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Truth Score:</span>
-                                             <span className={`text-xl font-medium ${getScoreTextColorClass(analysisDetails.gemini_score)}`}>
-                                               {(analysisDetails.gemini_score * 100).toFixed(0)}%
-                                             </span>
-                                           </div>
-                                         </div>
-                                       ) : (
-                                         <p className={`text-xl font-bold ${getScoreTextColorClass(analysisDetails.gemini_score)}`}>
-                                           {(analysisDetails.gemini_score * 100).toFixed(0)}%
-                                         </p>
-                                       )
-                                    ) : (
-                                        <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>N/A</p>
-                                    )}
-                                    <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>AI-based fact verification</p>
-                                  </div>
+                                   {/* Model Analysis Card - Show if gemini_score exists in nested */}
+                                  {(typeof analysisDetails.gemini_score === 'number') ? (
+                                      <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-green-50 border-green-100'}`}>
+                                        <div className="flex items-center mb-1">
+                                          <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Model Analysis</p>
+                                          <span className="ml-auto text-xl bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Primary</span>
+                                        </div>
+                                        {/* Use verdict from claims if available */}
+                                        {analysisDetails.claims?.[0]?.verdict ? ( 
+                                          <div>
+                                            <p className={`text-xl font-bold ${analysisDetails.claims[0].verdict === "REAL" || analysisDetails.claims[0].verdict !== "FAKE" ? "text-green-600" : "text-red-600"}`}>
+                                              {analysisDetails.claims[0].verdict} 
+                                            </p>
+                                            {/* Display score alongside verdict */}
+                                             <div className="flex items-center mt-1">
+                                              <span className={`text-xl mr-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Truth Score:</span>
+                                              <span className={`text-xl font-medium ${getScoreTextColorClass(analysisDetails.gemini_score)}`}>
+                                                {(analysisDetails.gemini_score * 100).toFixed(0)}%
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          // Fallback to just score if no verdict
+                                          <p className={`text-xl font-bold ${getScoreTextColorClass(analysisDetails.gemini_score)}`}>
+                                            {(analysisDetails.gemini_score * 100).toFixed(0)}%
+                                          </p>
+                                        )}
+                                        <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>AI-based fact verification</p>
+                                      </div>
+                                  ): ( 
+                                      <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-50 border-gray-100 text-gray-500'}`}>
+                                           <p className="text-xl font-semibold">Model Analysis</p>
+                                           <p className="text-xl italic mt-1">N/A</p>
+                                      </div>
+                                  )}
                                   
-                                  {/* Google Fact Check Card - Always show structure if analysisDetails exists */}
-                                  <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
-                                    <div className="flex items-center mb-1">
-                                      <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Google Fact Check</p>
-                                      <span className="ml-auto text-xl bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Secondary</span>
-                                    </div>
-                                    {typeof analysisDetails.google_fact_check_score === 'number' ? (
+                                  {/* Google Fact Check Card - Show if score exists in nested */}
+                                  {(typeof analysisDetails.google_fact_check_score === 'number') ? ( 
+                                      <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
+                                        <div className="flex items-center mb-1">
+                                          <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Google Fact Check</p>
+                                          <span className="ml-auto text-xl bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Secondary</span>
+                                        </div>
                                         <p className={`text-xl font-bold ${getScoreTextColorClass(analysisDetails.google_fact_check_score)}`}>
                                             {(analysisDetails.google_fact_check_score * 100).toFixed(0)}%
                                         </p>
-                                    ): (
-                                        <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>N/A</p>
-                                    )}
-                                    <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Database cross-reference</p>
-                                  </div>
+                                        <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Database cross-reference</p>
+                                      </div>
+                                  ): ( 
+                                       <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-50 border-gray-100 text-gray-500'}`}>
+                                           <p className="text-xl font-semibold">Google Fact Check</p>
+                                           <p className="text-xl italic mt-1">N/A</p>
+                                      </div>
+                                  )}
                                   
-                                  {/* News Source Verification Card - Always show structure if analysisDetails exists */}
-                                  <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-purple-50 border-purple-100'}`}>
-                                    <div className="flex items-center mb-1">
-                                      <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>News Source Verification</p>
-                                      <span className="ml-auto text-xl bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">Tertiary</span>
-                                    </div>
-                                    {typeof analysisDetails.external_verification_score === 'number' ? (
+                                  {/* News Source Verification Card - Show if score exists in nested */}
+                                  {(typeof analysisDetails.external_verification_score === 'number') ? ( 
+                                      <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-purple-50 border-purple-100'}`}>
+                                        <div className="flex items-center mb-1">
+                                          <p className={`text-xl font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>News Source Verification</p>
+                                          <span className="ml-auto text-xl bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">Tertiary</span>
+                                        </div>
                                         <p className={`text-xl font-bold ${getScoreTextColorClass(analysisDetails.external_verification_score)}`}>
                                             {(analysisDetails.external_verification_score * 100).toFixed(0)}%
                                         </p>
-                                    ) : (
-                                        <p className={`text-xl italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>N/A</p>
-                                    )}
-                                    <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Reliable source comparison</p>
-                                  </div>
+                                        <p className={`text-xl mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Reliable source comparison</p>
+                                      </div>
+                                  ) : ( 
+                                       <div className={`p-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-50 border-gray-100 text-gray-500'}`}>
+                                           <p className="text-xl font-semibold">News Source Verification</p>
+                                           <p className="text-xl italic mt-1">N/A</p>
+                                      </div>
+                                  )}
                                 </div>
                                 
-                                {/* Source credibility card */}
-                                {typeof analysisDetails.source_credibility === 'number' && analysisDetails.source_credibility !== 0.5 && (
+                                {/* Source credibility card - show if nested and available */}
+                                {typeof analysisDetails.source_credibility === 'number' && analysisDetails.source_credibility !== 0.5 && ( 
                                   <div className={`p-3 rounded-lg mb-2 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-gray-100 border border-gray-200'}`}>
                                     <div className="flex items-center">
                                       <p className={`text-lg font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Source Credibility</p>
@@ -754,102 +786,120 @@ function App() {
                                   </div>
                                 )}
                               </div>
-                            )}
-
-                            {/* Claims Found */}
-                            {analysisDetails.claims && analysisDetails.claims.length > 0 && (
-                              <div className="mt-4">
-                                <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Claims Analysis ({analysisDetails.claims_found || analysisDetails.claims.length})</h4>
-                                <div className={`border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
-                                  {analysisDetails.claims.map((claim, index) => (
-                                    <div key={index} className={`p-4 border-b last:border-b-0 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
-                                      {/* Google Fact Check API claim format */}
-                                      {claim.source_type === 'google_fact_check' && (
-                                        <>
-                                          <div className="flex items-center justify-between mb-2">
-                                            <p className={`font-semibold text-lg ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{claim.text}</p>
-                                            <span className="text-lg bg-blue-100 text-blue-800 px-2 py-1 rounded">Google Fact Check</span>
-                                          </div>
-                                          {claim.claimReview?.[0] && (
-                                              <div className="flex items-center mt-1">
-                                                <span className={`text-lg px-2 py-1 rounded mr-2 ${darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`}>
-                                                  {claim.claimReview[0].publisher?.name || 'Unknown Publisher'}
-                                                </span>
-                                                {claim.claimReview[0].url && (
-                                                  <span className="text-lg text-blue-600">
-                                                    <a href={claim.claimReview[0].url} target="_blank" rel="noopener noreferrer">
-                                                      View Source
-                                                    </a>
-                                                  </span>
-                                                )}
-                                              </div>
-                                          )}
-                                        </>
-                                      )}
-                                      
-                                      {/* Gemini AI claim format */}
-                                      {claim.source_type === 'gemini' && (
-                                        <>
-                                          <div className="flex items-center justify-between mb-2">
-                                            <p className={`font-semibold text-lg ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{claim.text}</p>
-                                            {typeof claim.truthfulness === 'number' && (
-                                               <span className="text-lg bg-green-100 text-green-800 px-2 py-1 rounded">
-                                                 Gemini AI • {(claim.truthfulness * 100).toFixed(0)}% True
-                                               </span>
-                                            )}
-                                          </div>
-                                          
-                                          {typeof claim.truthfulness === 'number' && (
-                                              <div className={`mt-2 w-full rounded-full h-2 mb-3 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
-                                                <div 
-                                                  className={`h-2 rounded-full ${getScoreColorClass(claim.truthfulness)}`}
-                                                  style={{ width: `${claim.truthfulness * 100}%` }}
-                                                ></div>
-                                              </div>
-                                          )}
-                                          
-                                          {claim.evidence && (
-                                            <div className={`mt-2 mb-3 text-lg p-2 rounded ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-700'}`}>
-                                              <p><span className="font-semibold">Analysis:</span> {claim.evidence}</p>
-                                            </div>
-                                          )}
-                                          
-                                          {claim.sources && claim.sources.length > 0 && (
-                                            <div className="mt-2">
-                                              <p className={`text-lg font-semibold mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>SOURCES:</p>
-                                              <div className="flex flex-wrap gap-2">
-                                                {claim.sources.map((source, i) => (
-                                                   source.url ? (
-                                                    <a 
-                                                      key={i}
-                                                      href={source.url} 
-                                                      target="_blank" 
-                                                      rel="noopener noreferrer"
-                                                      className={`text-lg border px-2 py-1 rounded-full transition-colors ${darkMode ? 'bg-gray-600 border-gray-500 hover:bg-gray-500 text-gray-200' : 'bg-white border-gray-300 hover:bg-gray-50 text-gray-700'}`}
-                                                    >
-                                                      {source.name || new URL(source.url).hostname} 
-                                                    </a>
-                                                    ) : (
-                                                        <span key={i} className={`text-lg border px-2 py-1 rounded-full ${darkMode ? 'bg-gray-600 border-gray-500 text-gray-200' : 'bg-white border-gray-300 text-gray-700'}`}>
-                                                           {source.name || 'Unknown Source'}
-                                                        </span>
-                                                    )
-                                                ))}
-                                              </div>
-                                            </div>
-                                          )}
-                                        </>
-                                      )}
-                                      {!claim.source_type && (
-                                           <p className={`font-semibold text-lg ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{claim.text || JSON.stringify(claim)}</p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                            )} 
+                            {/* End of conditional Verification Methods section */}
                           </div>
-                        )}
+                        )} {/* End of conditional analysisDetails block */}
+
+
+                        {/* Claims Found - Uses the unified 'claims' variable */}
+                        {claims && claims.length > 0 && ( 
+                          <div className="mt-4">
+                             {/* Adjust title based on source if analysisDetails exists */}
+                             <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                               Claims Analysis ({analysisDetails?.claims_found || claims.length})
+                            </h4>
+                            <div className={`border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
+                              {claims.map((claim, index) => {
+                                // --- Define variables within the callback scope ---
+                                const claimText = claim.text || claim.claim_text; 
+                                // --- End variable definitions ---
+
+                                // --- Return the JSX for this claim ---
+                                return ( 
+                                  <div key={index} className={`p-4 border-b last:border-b-0 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+                                    
+                                    {/* Display claim text */}
+                                    <p className={`font-semibold text-lg mb-2 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{claimText}</p>
+
+                                    {/* Display Verdict/Score Badge (if available) */}
+                                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                        {/* Add a default label if needed */}
+                                        <span></span> 
+                                        {claim.verdict && ( // Check for verdict (common in image format)
+                                            <span className={`text-lg px-2 py-1 rounded font-bold ${claim.verdict === 'FAKE' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                                                {claim.verdict}
+                                            </span>
+                                        )}
+                                        {claim.source_type === 'google_fact_check' && ( // Specific badge for Google source
+                                            <span className="text-lg bg-blue-100 text-blue-800 px-2 py-1 rounded">Google Fact Check</span>
+                                        )}
+                                         {claim.source_type === 'gemini' && typeof claim.truthfulness === 'number' && !claim.verdict && ( // Badge for Gemini if no verdict
+                                            <span className="text-lg bg-green-100 text-green-800 px-2 py-1 rounded">
+                                              Gemini AI • {(claim.truthfulness * 100).toFixed(0)}% True
+                                            </span>
+                                         )}
+                                    </div>
+
+
+                                    {/* Display Truthfulness Score Bar (if available) */}
+                                    {typeof claim.truthfulness === 'number' && (
+                                        <div className={`mt-1 w-full rounded-full h-2 mb-3 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
+                                          <div 
+                                            className={`h-2 rounded-full ${getScoreColorClass(claim.truthfulness)}`}
+                                            style={{ width: `${claim.truthfulness * 100}%` }}
+                                          ></div>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Display Evidence (if available) */}
+                                    {claim.evidence && (
+                                      <div className={`mt-2 mb-3 text-lg p-2 rounded ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-700'}`}>
+                                        <p><span className="font-semibold">Analysis:</span> {claim.evidence}</p>
+                                      </div>
+                                    )}
+
+                                    {/* Display Google Fact Check Publisher/Link (if available) */}
+                                    {claim.source_type === 'google_fact_check' && claim.claimReview?.[0] && (
+                                        <div className="flex items-center mt-1 mb-3">
+                                          <span className={`text-lg px-2 py-1 rounded mr-2 ${darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`}>
+                                            {claim.claimReview[0].publisher?.name || 'Unknown Publisher'}
+                                          </span>
+                                          {claim.claimReview[0].url && (
+                                            <span className="text-lg text-blue-600 hover:underline">
+                                              <a href={claim.claimReview[0].url} target="_blank" rel="noopener noreferrer">
+                                                View Source
+                                              </a>
+                                            </span>
+                                          )}
+                                        </div>
+                                    )}
+                                    
+                                    {/* Display Sources (if available) */}
+                                    {claim.sources && claim.sources.length > 0 && (
+                                      <div className="mt-2">
+                                        <p className={`text-lg font-semibold mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>SOURCES:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {claim.sources.map((source, i) => (
+                                             source.url ? (
+                                              <a 
+                                                key={i}
+                                                href={source.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className={`text-lg border px-2 py-1 rounded-full transition-colors ${darkMode ? 'bg-gray-600 border-gray-500 hover:bg-gray-500 text-gray-200' : 'bg-white border-gray-300 hover:bg-gray-50 text-gray-700'}`}
+                                              >
+                                                {source.name || new URL(source.url).hostname} 
+                                              </a>
+                                              ) : (
+                                                  <span key={i} className={`text-lg border px-2 py-1 rounded-full ${darkMode ? 'bg-gray-600 border-gray-500 text-gray-200' : 'bg-white border-gray-300 text-gray-700'}`}>
+                                                     {source.name || 'Unknown Source'}
+                                                  </span>
+                                              )
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* --- End Claim Rendering Logic --- */}
+                                  </div> 
+                                ); // End return JSX
+                                // --- End JSX return ---
+                              })} 
+                              {/* End map function body */}
+                            </div>
+                          </div>
+                        )} 
+                        {/* End Claims Section */}
                       </>
                    );
                 })()}
